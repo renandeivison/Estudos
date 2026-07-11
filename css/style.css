@@ -16,6 +16,8 @@ html[data-theme="dark"] {
     --input-bg: #0d1117;
     --success-green: #3f9142;
     --success-text: #56d364;
+    --danger: #f85149;
+    --danger-bg: rgba(248, 81, 73, 0.15);
 
     /* Cores do Heatmap estilo GitHub Dark */
     --heatmap-0: #161b22;
@@ -40,6 +42,8 @@ html[data-theme="light"] {
     --input-bg: #ffffff;
     --success-green: #2da44e;
     --success-text: #1a7f37;
+    --danger: #cf222e;
+    --danger-bg: rgba(207, 34, 46, 0.1);
 
     /* Cores do Heatmap estilo GitHub Light */
     --heatmap-0: #ebedf0;
@@ -85,11 +89,17 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
 
 .card { background-color: var(--card-bg); border: 1px solid var(--border-default); border-radius: 6px; padding: 1.25rem; position: relative; }
 .disciplinas-grid { display: flex; flex-direction: column; gap: 1rem; }
-.disciplina-card { border-left: 6px solid var(--accent); cursor: pointer; }
+.disciplina-card { border-left: 6px solid var(--accent); cursor: pointer; padding-right: 2.75rem; }
 .disciplina-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.8125rem; }
 .progress-container { background-color: var(--border-default); border-radius: 3px; height: 8px; overflow: hidden; }
 .progress-bar { background-color: var(--success-green); height: 100%; width: 0%; transition: width 0.3s; }
 .empty-state { text-align: center; padding: 3rem 1rem; border: 1px dashed var(--border-default); border-radius: 6px; color: var(--text-secondary); }
+
+.btn-delete-icon { background: transparent; border: 1px solid transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.9rem; padding: 0.3rem 0.4rem; border-radius: 6px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.btn-delete-icon:hover { color: var(--danger); background-color: var(--danger-bg); border-color: var(--danger); }
+.disciplina-delete-btn { position: absolute; top: 0.85rem; right: 0.85rem; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background-color: var(--danger-bg); }
 
 /* ==========================================================================
    DASHBOARD
@@ -200,7 +210,10 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
 .assunto-checkbox:checked::after { content: ''; width: 5px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-0.5px, -0.5px); }
 .tree-leaf.concluido { opacity: 0.65; color: var(--success-text); }
 .btn-add-sub { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.15rem; visibility: hidden; padding: 0 0.25rem; }
-.tree-summary:hover .btn-add-sub, .tree-leaf:hover .btn-add-sub { visibility: visible; }
+.btn-delete-item { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.9rem; visibility: hidden; padding: 0 0.25rem; }
+.btn-delete-item:hover { color: var(--danger); }
+.tree-summary:hover .btn-add-sub, .tree-leaf:hover .btn-add-sub,
+.tree-summary:hover .btn-delete-item, .tree-leaf:hover .btn-delete-item { visibility: visible; }
 
 /* ==========================================================================
    MODAIS & NAVEGAÇÃO
