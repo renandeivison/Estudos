@@ -174,10 +174,17 @@ function initNavigation() {
             return;
         }
 
+        // Um popstate real significa que o navegador já consumiu a entrada
+        // que tínhamos empilhado — então o buffer deixou de existir, não
+        // importa o que a variável dizia até aqui. Resetamos antes de tudo
+        // pra não ficarmos "achando" que ainda existe uma entrada quando
+        // na prática ela já foi embora.
+        backBufferAtivo = false;
+
         // Dentro de uma disciplina -> volta pra lista de disciplinas
         if (state.currentDisciplinaId) {
             ativarAba('disciplinas');
-            empilharBackBuffer(); // re-arma o buffer pra próxima vez que apertar voltar
+            empilharBackBuffer(); // empilha de novo pra próxima vez que apertar voltar
             return;
         }
 
@@ -186,7 +193,7 @@ function initNavigation() {
         const jaEstaNoDashboard = dashboardView && dashboardView.classList.contains('active');
         if (!jaEstaNoDashboard) {
             ativarAba('dashboard');
-            backBufferAtivo = false; // não re-empilha: o próximo "voltar" no Dashboard sai do app
+            // backBufferAtivo já está false: o próximo "voltar" no Dashboard sai do app
         }
         // Se já estava no Dashboard, não fazemos nada: o navegador segue seu fluxo normal.
     });
