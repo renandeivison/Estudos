@@ -247,7 +247,13 @@ function getCSSVar(nome) {
 // Ajusta o canvas para telas de alta densidade (Retina) e retorna o contexto pronto para uso
 function setupCanvasHiDPI(canvas, cssHeight) {
     const dpr = window.devicePixelRatio || 1;
-    const cssWidth = canvas.parentElement.clientWidth;
+    const parent = canvas.parentElement;
+    // Descontamos o padding horizontal do card pai: clientWidth inclui o padding,
+    // e se não descontarmos, o canvas fica mais largo que a área de conteúdo
+    // disponível e "vaza" para fora do card.
+    const estilosPai = getComputedStyle(parent);
+    const paddingHorizontal = parseFloat(estilosPai.paddingLeft || 0) + parseFloat(estilosPai.paddingRight || 0);
+    const cssWidth = Math.max(parent.clientWidth - paddingHorizontal, 0);
     canvas.style.width = cssWidth + 'px';
     canvas.style.height = cssHeight + 'px';
     canvas.width = Math.max(Math.round(cssWidth * dpr), 1);
@@ -634,8 +640,13 @@ function initDisciplinas() {
 function initAssuntos() {
     const btnBack = document.getElementById('btn-back-disciplinas');
     const formAssunto = document.getElementById('form-assunto');
+    const btnDeleteDisciplinaAtual = document.getElementById('btn-delete-disciplina-atual');
 
     btnBack.addEventListener('click', showDisciplinasMainList);
+
+    btnDeleteDisciplinaAtual.addEventListener('click', () => {
+        if (state.currentDisciplinaId) deleteDisciplina(state.currentDisciplinaId);
+    });
 
     formAssunto.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -766,6 +777,9 @@ function openDisciplinaDetalhes(id) {
     document.getElementById('detalhe-disciplina-nome').textContent = disciplina.nome;
     renderTree();
 }
+// Exposta em window: é chamada via onclick inline no card, e em módulos ES
+// as funções não viram globais automaticamente.
+window.openDisciplinaDetalhes = openDisciplinaDetalhes;
 
 function showDisciplinasMainList() {
     state.currentDisciplinaId = null;
@@ -773,6 +787,28 @@ function showDisciplinasMainList() {
     document.getElementById('disciplinas-list-container').classList.remove('hidden');
     renderDisciplinas();
 }
+
+function deleteDisciplina(id) {
+    const disciplina = state.disciplinas.find(d => d.id === id);
+    if (!disciplina) return;
+
+    const mensagem = disciplina.qtdAssuntos > 0
+        ? `Excluir a disciplina "${disciplina.nome}" e todos os seus ${disciplina.qtdAssuntos} assunto(s)? Essa ação não pode ser desfeita.`
+        : `Excluir a disciplina "${disciplina.nome}"? Essa ação não pode ser desfeita.`;
+    if (!confirm(mensagem)) return;
+
+    state.disciplinas = state.disciplinas.filter(d => d.id !== id);
+    saveStateAndRefresh();
+
+    // Se a disciplina excluída era a que estava aberta, volta pra lista principal
+    if (state.currentDisciplinaId === id) {
+        showDisciplinasMainList();
+    } else {
+        renderDisciplinas();
+    }
+}
+// Exposta em window: chamada via onclick inline no card e no botão de exclusão.
+window.deleteDisciplina = deleteDisciplina;
 
 window.promptAddSubItem = function(event, paiId) {
     event.stopPropagation();
@@ -837,6 +873,47 @@ window.toggleTreeItem = function(id) {
     renderTree();
 };
 
+window.deleteTreeItem = function(event, id) {
+    event.stopPropagation();
+    event.preventDefault();
+
+    const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
+    if (!disciplina) return;
+
+    // Localiza o item primeiro só pra saber o título e se ele tem filhos,
+    // e montar uma confirmação mais clara antes de remover de fato.
+    let itemEncontrado = null;
+    const buscar = (itens) => {
+        for (const item of itens) {
+            if (item.id === id) { itemEncontrado = item; return true; }
+            if (item.filhos && item.filhos.length > 0 && buscar(item.filhos)) return true;
+        }
+        return false;
+    };
+    buscar(disciplina.assuntos);
+    if (!itemEncontrado) return;
+
+    const temFilhos = itemEncontrado.filhos && itemEncontrado.filhos.length > 0;
+    const mensagem = temFilhos
+        ? `Excluir "${itemEncontrado.titulo}" e todos os seus sub-assuntos? Essa ação não pode ser desfeita.`
+        : `Excluir "${itemEncontrado.titulo}"? Essa ação não pode ser desfeita.`;
+    if (!confirm(mensagem)) return;
+
+    const removerDoNivel = (itens) => {
+        const idx = itens.findIndex(i => i.id === id);
+        if (idx !== -1) { itens.splice(idx, 1); return true; }
+        for (const item of itens) {
+            if (item.filhos && item.filhos.length > 0 && removerDoNivel(item.filhos)) return true;
+        }
+        return false;
+    };
+    removerDoNivel(disciplina.assuntos);
+
+    recalcularDisciplina(disciplina);
+    saveStateAndRefresh();
+    renderTree();
+};
+
 function recalcularDisciplina(disciplina) {
     let totaisGerais = 0;
     let concluidosGerais = 0;
@@ -881,6 +958,7 @@ function renderDisciplinas() {
 
     grid.innerHTML = state.disciplinas.map(disc => `
         <div class="card disciplina-card" style="border-left-color: ${disc.cor}" onclick="openDisciplinaDetalhes('${disc.id}')">
+            <button class="btn-delete-icon disciplina-delete-btn" onclick="event.stopPropagation(); deleteDisciplina('${disc.id}')" aria-label="Excluir disciplina" title="Excluir disciplina">🗑</button>
             <h3>${escapeHTML(disc.nome)}</h3>
             <div class="disciplina-meta">
                 <span>Assuntos: <strong>${disc.qtdAssuntos}</strong></span>
@@ -926,7 +1004,8 @@ function renderTree() {
                             </div>
                             <div style="display:flex; align-items:center; gap:0.5rem;">
                                 <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
-                                <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')">+</button>
+                                <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')" title="Adicionar sub-assunto">+</button>
+                                <button class="btn-delete-item" onclick="deleteTreeItem(event, '${item.id}')" title="Excluir">🗑</button>
                             </div>
                         </summary>
                         <div class="tree-children">${item.filhos.map(gerarHTMLNo).join('')}</div>
@@ -938,7 +1017,8 @@ function renderTree() {
                 <div class="tree-leaf ${item.concluido ? 'concluido' : ''}">
                     <input type="checkbox" class="assunto-checkbox" id="${item.id}" ${item.concluido ? 'checked' : ''} onclick="toggleTreeItem('${item.id}')">
                     <label for="${item.id}">${escapeHTML(item.titulo)}</label>
-                    <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')">+</button>
+                    <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')" title="Adicionar sub-assunto">+</button>
+                    <button class="btn-delete-item" onclick="deleteTreeItem(event, '${item.id}')" title="Excluir">🗑</button>
                 </div>
             `;
         }
