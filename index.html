@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Tracker</title>
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#010409">
+    <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Study Tracker">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <div class="header-container">
+            <h1 class="app-logo">
+                <svg height="24" viewBox="0 0 16 16" width="24" class="logo-icon"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82A7.48 7.48 0 0 0 8 2.51c-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
+                Study Tracker
+            </h1>
+            <div class="header-actions">
+                <button id="btn-install-pwa" class="btn-theme hidden" aria-label="Instalar aplicativo" title="Instalar aplicativo">
+                    <span class="install-icon">⬇</span>
+                </button>
+                <button id="theme-toggle" class="btn-theme" aria-label="Alternar tema">
+                    <span class="theme-icon"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-main">
+        
+        <section id="dashboard-view" class="view-section active">
+            <div class="view-header">
+                <h2>Dashboard</h2>
+                <p class="view-subtitle">Bem-vindo de volta! Aqui está o resumo geral dos seus estudos.</p>
+            </div>
+            
+            <div class="card dashboard-summary-card">
+                <h3>Progresso Geral</h3>
+                <div class="dashboard-progress-header">
+                    <span id="dash-progresso-text" class="dash-progresso-text">0%</span>
+                </div>
+                <div class="dashboard-progress-container">
+                    <div id="dash-progresso-bar" class="dashboard-progress-bar"></div>
+                </div>
+            </div>
+
+            <div class="dashboard-metrics-grid">
+                <div class="card metric-card">
+                    <h4>Disciplinas</h4>
+                    <span id="dash-disciplinas" class="metric-value">0</span>
+                </div>
+                <div class="card metric-card">
+                    <h4>Assuntos Totais</h4>
+                    <span id="dash-assuntos" class="metric-value">0</span>
+                </div>
+                <div class="card metric-card">
+                    <h4>Concluídos</h4>
+                    <span id="dash-concluidos" class="metric-value metric-success">0</span>
+                </div>
+                <div class="card metric-card">
+                    <h4>Restantes</h4>
+                    <span id="dash-restantes" class="metric-value metric-warning">0</span>
+                </div>
+            </div>
+        </section>
+
+        <section id="disciplinas-view" class="view-section">
+            
+            <div class="card search-card">
+                <div class="search-wrapper">
+                    <svg viewBox="0 0 16 16" width="16" height="16" class="search-icon"><path d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.49 3.49a.75.75 0 1 1-1.06 1.06l-3.49-3.49Zm-4.68 1.26a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Z"></path></svg>
+                    <input type="text" id="global-search" placeholder="Pesquisar em milhares de tópicos instantaneamente...">
+                </div>
+                <div id="search-results" class="search-results-dropdown hidden"></div>
+            </div>
+
+            <div id="disciplinas-list-container">
+                <div class="view-header section-with-action">
+                    <div>
+                        <h2>Disciplinas</h2>
+                        <p class="view-subtitle">Gerencie as matérias e acompanhe seu progresso geral.</p>
+                    </div>
+                    <div class="action-buttons-group">
+                        <button id="btn-import-edital" class="btn btn-secondary">Importar edital</button>
+                        <button id="btn-new-disciplina" class="btn btn-primary">Nova disciplina</button>
+                    </div>
+                </div>
+
+                <div id="disciplinas-grid" class="disciplinas-grid">
+                    </div>
+            </div>
+
+            <div id="disciplina-detalhes-container" class="hidden">
+                <div class="view-header section-with-action">
+                    <div>
+                        <button id="btn-back-disciplinas" class="btn btn-link">
+                            &larr; Voltar para disciplinas
+                        </button>
+                        <h2 id="detalhe-disciplina-nome" style="margin-top: 0.5rem;">Nome da Disciplina</h2>
+                        <p class="view-subtitle" id="detalhe-disciplina-progresso">0% concluído</p>
+                    </div>
+                </div>
+
+                <div class="card quick-add-card">
+                    <form id="form-assunto">
+                        <input type="text" id="assunto-titulo" required placeholder="Adicionar assunto ou grupo principal...">
+                        <button type="submit" class="btn btn-primary">Adicionar</button>
+                    </form>
+                </div>
+
+                <div id="assuntos-tree" class="assuntos-tree">
+                    </div>
+            </div>
+        </section>
+
+        <section id="calendario-view" class="view-section">
+            <div class="view-header">
+                <h2>Calendário de Estudos</h2>
+                <p class="view-subtitle">Acompanhe sua consistência e contribuições diárias.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="heatmap-scroll" id="heatmap-container">
+                    </div>
+                <div class="heatmap-legend">
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Menos</span>
+                    <div class="heatmap-cell" data-level="0"></div>
+                    <div class="heatmap-cell" data-level="1"></div>
+                    <div class="heatmap-cell" data-level="2"></div>
+                    <div class="heatmap-cell" data-level="3"></div>
+                    <div class="heatmap-cell" data-level="4"></div>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Mais</span>
+                </div>
+            </div>
+
+            <div id="calendario-details-card" class="card hidden">
+                <h3 id="cal-details-date" style="margin-bottom: 0.25rem;">Selecione um dia</h3>
+                <p class="view-subtitle" id="cal-details-count" style="margin-bottom: 1.25rem;">Nenhum assunto concluído</p>
+                <ul id="cal-details-list" class="cal-details-list">
+                    </ul>
+            </div>
+        </section>
+
+        <section id="estatisticas-view" class="view-section">
+            <div class="view-header">
+                <h2>Estatísticas</h2>
+                <p class="view-subtitle">Análise detalhada do seu tempo de estudo.</p>
+            </div>
+
+            <div class="stats-grid-top">
+                <div class="card stat-highlight-card">
+                    <h4>Percentual Geral</h4>
+                    <div class="stat-donut-wrapper">
+                        <canvas id="chart-percentual-geral"></canvas>
+                        <span id="stat-percentual-valor" class="stat-donut-value">0%</span>
+                    </div>
+                </div>
+                <div class="card stat-highlight-card">
+                    <h4>Sequência de Estudos</h4>
+                    <div class="stat-streak-icon">🔥</div>
+                    <span id="stat-streak-valor" class="stat-highlight-value">0 dias</span>
+                    <p class="view-subtitle" id="stat-streak-recorde">Recorde: 0 dias</p>
+                </div>
+            </div>
+
+            <div class="card stat-chart-card">
+                <h3>Progresso por Disciplina</h3>
+                <canvas id="chart-disciplinas"></canvas>
+                <p class="empty-state-inline hidden" id="stat-disciplinas-empty">Nenhuma disciplina cadastrada ainda.</p>
+            </div>
+
+            <div class="card stat-chart-card">
+                <h3>Assuntos Concluídos por Mês</h3>
+                <canvas id="chart-mensal"></canvas>
+            </div>
+
+            <div class="card stat-chart-card">
+                <h3>Assuntos Concluídos por Semana</h3>
+                <canvas id="chart-semanal"></canvas>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="modal-disciplina" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Nova Disciplina</h3>
+                <button class="btn-close close-modal-btn">&times;</button>
+            </div>
+            <form id="form-disciplina">
+                <div class="form-group">
+                    <label for="disciplina-nome">Nome da Disciplina</label>
+                    <input type="text" id="disciplina-nome" required placeholder="Ex: Estrutura de Dados, Cálculo I...">
+                </div>
+                <div class="form-group">
+                    <label for="disciplina-cor">Cor de Identificação</label>
+                    <input type="color" id="disciplina-cor" value="#2f81f7">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary close-modal-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-importacao" class="modal-overlay">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <h3>Importar Edital (Lote)</h3>
+                <button class="btn-close close-import-btn">&times;</button>
+            </div>
+            <form id="form-importacao">
+                <div class="form-group">
+                    <label for="import-text">Cole o conteúdo do edital abaixo</label>
+                    <p class="view-subtitle" style="margin-bottom: 0.5rem;">Separe blocos de matérias deixando uma linha em branco entre eles. A primeira linha de cada bloco será a Disciplina.</p>
+                    <textarea id="import-text" required placeholder="Direito Constitucional&#10;Teoria Geral&#10;Conceito&#10;&#10;Direito Administrativo&#10;Atos Administrativos&#10;Licitações"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary close-import-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Processar e Criar Estruturas</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <nav class="app-navigation">
+        <ul class="nav-list">
+            <li class="nav-item">
+                <button class="nav-link active" data-target="dashboard">
+                    <svg viewBox="0 0 16 16" width="16" height="16"><path d="M11.5 6.75v6.75a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1-.75-.75v-3a.25.25 0 0 0-.25-.25h-1.5a.25.25 0 0 0-.25.25v3a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1-.75-.75V6.75a.75.75 0 0 1 .22-.53l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1 .22.53Z"></path></svg>
+                    <span>Dashboard</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-target="disciplinas">
+                    <svg viewBox="0 0 16 16" width="16" height="16"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5Zm1.5-.5a.5.5 0 0 0-.5.5V13h8V2.5a.5.5 0 0 0-.5-.5Z"></path></svg>
+                    <span>Disciplinas</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-target="calendario">
+                    <svg viewBox="0 0 16 16" width="16" height="16"><path d="M4.75 0a.75.75 0 0 1 .75.75V2h5V.75a.75.75 0 0 1 1.5 0V2h1.25c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 13.25 16H2.75A1.75 1.75 0 0 1 1 14.25V3.75C1 2.784 1.784 2 2.75 2H4V.75A.75.75 0 0 1 .75 0ZM2.5 7.5v6.75c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V7.5Zm10.75-4H2.75a.25.25 0 0 0-.25.25V6h11V3.75a.25.25 0 0 0-.25-.25Z"></path></svg>
+                    <span>Calendário</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-target="estatisticas">
+                    <svg viewBox="0 0 16 16" width="16" height="16"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25ZM1.75 1.5a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM4.75 5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 4.75 5ZM8 3a.75.75 0 0 1 .75.75v6.5a.75.75 0 0 1-1.5 0v-6.5A.75.75 0 0 1 8 3Zm3.25 4a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 .75-.75Z"></path></svg>
+                    <span>Estatísticas</span>
+                </button>
+            </li>
+        </ul>
+    </nav>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
