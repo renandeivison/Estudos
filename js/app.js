@@ -105,28 +105,90 @@ function initTheme() {
     });
 }
 
-function initNavigation() {
+// Aplica a troca visual de aba (nav ativa + seção visível) e dispara o
+// carregamento de dados daquela aba. Usada tanto pelo clique manual na nav
+// quanto pela navegação programática (botão "voltar" do navegador/celular).
+function ativarAba(targetView) {
     const navLinks = document.querySelectorAll('.nav-link');
     const sections = document.querySelectorAll('.view-section');
 
+    navLinks.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-target') === targetView));
+    sections.forEach(section => section.classList.toggle('active', section.id === `${targetView}-view`));
+
+    if (targetView === 'disciplinas') showDisciplinasMainList();
+    if (targetView === 'dashboard') updateDashboard();
+    if (targetView === 'calendario') renderHeatmap();
+    if (targetView === 'estatisticas') renderEstatisticas();
+}
+
+/**
+ * BOTÃO VOLTAR (histórico do navegador / botão físico do celular)
+ *
+ * Regra:
+ *  - Dentro de uma disciplina -> volta para a lista de disciplinas.
+ *  - Em qualquer outra aba (Disciplinas, Calendário, Estatísticas) -> volta para o Dashboard.
+ *  - No Dashboard -> comportamento padrão do navegador (sai do app).
+ *
+ * Mantemos no máximo UMA entrada extra empilhada no histórico enquanto o
+ * usuário está fora do Dashboard. Assim, "voltar" sempre cai exatamente um
+ * nível, e no Dashboard não sobra nenhuma entrada extra pra "voltar" agir sobre
+ * (o que faz o botão voltar sair do app normalmente, como o usuário espera).
+ */
+let backBufferAtivo = false;
+let ignorarProximoPopstate = false;
+
+function empilharBackBuffer() {
+    if (!backBufferAtivo) {
+        history.pushState({ studyTrackerApp: true }, '', location.href);
+        backBufferAtivo = true;
+    }
+}
+
+function limparBackBufferSeNecessario() {
+    if (backBufferAtivo) {
+        ignorarProximoPopstate = true;
+        backBufferAtivo = false;
+        history.back();
+    }
+}
+
+function initNavigation() {
+    const navLinks = document.querySelectorAll('.nav-link');
+
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
-            const button = e.currentTarget;
-            const targetView = button.getAttribute('data-target');
-            
-            navLinks.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
+            const targetView = e.currentTarget.getAttribute('data-target');
+            ativarAba(targetView);
 
-            sections.forEach(section => {
-                section.classList.remove('active');
-                if (section.id === `${targetView}-view`) section.classList.add('active');
-            });
-
-            if (targetView === 'disciplinas') showDisciplinasMainList();
-            if (targetView === 'dashboard') updateDashboard();
-            if (targetView === 'calendario') renderHeatmap();
-            if (targetView === 'estatisticas') renderEstatisticas();
+            if (targetView === 'dashboard') {
+                limparBackBufferSeNecessario();
+            } else {
+                empilharBackBuffer();
+            }
         });
+    });
+
+    window.addEventListener('popstate', () => {
+        if (ignorarProximoPopstate) {
+            ignorarProximoPopstate = false;
+            return;
+        }
+
+        // Dentro de uma disciplina -> volta pra lista de disciplinas
+        if (state.currentDisciplinaId) {
+            ativarAba('disciplinas');
+            empilharBackBuffer(); // re-arma o buffer pra próxima vez que apertar voltar
+            return;
+        }
+
+        // Em qualquer aba que não seja o Dashboard -> volta pro Dashboard
+        const dashboardView = document.getElementById('dashboard-view');
+        const jaEstaNoDashboard = dashboardView && dashboardView.classList.contains('active');
+        if (!jaEstaNoDashboard) {
+            ativarAba('dashboard');
+            backBufferAtivo = false; // não re-empilha: o próximo "voltar" no Dashboard sai do app
+        }
+        // Se já estava no Dashboard, não fazemos nada: o navegador segue seu fluxo normal.
     });
 
     let resizeTimeout;
@@ -790,6 +852,7 @@ function openDisciplinaDetalhes(id) {
     document.getElementById('disciplina-detalhes-container').classList.remove('hidden');
     document.getElementById('detalhe-disciplina-nome').textContent = disciplina.nome;
     renderTree();
+    empilharBackBuffer();
 }
 // Exposta em window: é chamada via onclick inline no card, e em módulos ES
 // as funções não viram globais automaticamente.
