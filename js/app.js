@@ -112,6 +112,13 @@ function ativarAba(targetView) {
     const navLinks = document.querySelectorAll('.nav-link');
     const sections = document.querySelectorAll('.view-section');
 
+    // Trocar de aba sempre sai do "modo detalhe de disciplina" — mesmo que o
+    // usuário tenha ido direto pra outra aba sem clicar em "Voltar". Sem
+    // isso, o estado ficava dizendo que uma disciplina ainda estava aberta
+    // mesmo com outra aba na tela, e o botão voltar acabava te mandando pro
+    // lugar errado.
+    state.currentDisciplinaId = null;
+
     navLinks.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-target') === targetView));
     sections.forEach(section => section.classList.toggle('active', section.id === `${targetView}-view`));
 
