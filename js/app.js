@@ -131,31 +131,34 @@ function ativarAba(targetView) {
 /**
  * BOTÃO VOLTAR (histórico do navegador / botão físico do celular)
  *
- * Regra:
- *  - Dentro de uma disciplina -> volta para a lista de disciplinas.
- *  - Em qualquer outra aba (Disciplinas, Calendário, Estatísticas) -> volta para o Dashboard.
- *  - No Dashboard -> comportamento padrão do navegador (sai do app).
+ * Modelo de profundidade:
+ *   nível 0 = Dashboard
+ *   nível 1 = qualquer outra aba (Disciplinas, Calendário, Estatísticas)
+ *   nível 2 = dentro do detalhe de uma disciplina
  *
- * Mantemos no máximo UMA entrada extra empilhada no histórico enquanto o
- * usuário está fora do Dashboard. Assim, "voltar" sempre cai exatamente um
- * nível, e no Dashboard não sobra nenhuma entrada extra pra "voltar" agir sobre
- * (o que faz o botão voltar sair do app normalmente, como o usuário espera).
+ * Importante: só empilhamos entradas no histórico em resposta direta a um
+ * clique/toque do usuário (subirNivel/irParaNivel), NUNCA de dentro do
+ * handler de popstate. Isso evita inconsistências com o gesto de "voltar
+ * preditivo" do Android, que precisa que a entrada já exista de antemão —
+ * criá-la só depois que o popstate já disparou pode chegar tarde demais
+ * pro próximo gesto de voltar.
  */
-let backBufferAtivo = false;
+let nivelHistorico = 0;
 let ignorarProximoPopstate = false;
 
-function empilharBackBuffer() {
-    if (!backBufferAtivo) {
-        history.pushState({ studyTrackerApp: true }, '', location.href);
-        backBufferAtivo = true;
-    }
+function subirNivel() {
+    nivelHistorico++;
+    history.pushState({ nivel: nivelHistorico }, '', location.href);
 }
 
-function limparBackBufferSeNecessario() {
-    if (backBufferAtivo) {
+function irParaNivel(alvo) {
+    if (nivelHistorico < alvo) {
+        while (nivelHistorico < alvo) subirNivel();
+    } else if (nivelHistorico > alvo) {
         ignorarProximoPopstate = true;
-        backBufferAtivo = false;
-        history.back();
+        const passos = nivelHistorico - alvo;
+        nivelHistorico = alvo;
+        history.go(-passos);
     }
 }
 
@@ -166,12 +169,7 @@ function initNavigation() {
         link.addEventListener('click', (e) => {
             const targetView = e.currentTarget.getAttribute('data-target');
             ativarAba(targetView);
-
-            if (targetView === 'dashboard') {
-                limparBackBufferSeNecessario();
-            } else {
-                empilharBackBuffer();
-            }
+            irParaNivel(targetView === 'dashboard' ? 0 : 1);
         });
     });
 
@@ -181,28 +179,18 @@ function initNavigation() {
             return;
         }
 
-        // Um popstate real significa que o navegador já consumiu a entrada
-        // que tínhamos empilhado — então o buffer deixou de existir, não
-        // importa o que a variável dizia até aqui. Resetamos antes de tudo
-        // pra não ficarmos "achando" que ainda existe uma entrada quando
-        // na prática ela já foi embora.
-        backBufferAtivo = false;
+        // Um popstate real do usuário sempre desce exatamente 1 nível
+        nivelHistorico = Math.max(0, nivelHistorico - 1);
 
-        // Dentro de uma disciplina -> volta pra lista de disciplinas
+        // Dentro de uma disciplina -> volta pra lista de disciplinas (nível 1)
         if (state.currentDisciplinaId) {
             ativarAba('disciplinas');
-            empilharBackBuffer(); // empilha de novo pra próxima vez que apertar voltar
-            return;
-        }
-
-        // Em qualquer aba que não seja o Dashboard -> volta pro Dashboard
-        const dashboardView = document.getElementById('dashboard-view');
-        const jaEstaNoDashboard = dashboardView && dashboardView.classList.contains('active');
-        if (!jaEstaNoDashboard) {
+        } else if (nivelHistorico === 0) {
+            // Em qualquer aba que não seja o Dashboard -> volta pro Dashboard
             ativarAba('dashboard');
-            // backBufferAtivo já está false: o próximo "voltar" no Dashboard sai do app
         }
-        // Se já estava no Dashboard, não fazemos nada: o navegador segue seu fluxo normal.
+        // Se já estava numa aba não-dashboard sem disciplina aberta, não faz
+        // nada: a tela já está correta, e o próximo "voltar" desce pro Dashboard.
     });
 
     let resizeTimeout;
@@ -732,7 +720,10 @@ function initAssuntos() {
     const formAssunto = document.getElementById('form-assunto');
     const btnDeleteDisciplinaAtual = document.getElementById('btn-delete-disciplina-atual');
 
-    btnBack.addEventListener('click', showDisciplinasMainList);
+    btnBack.addEventListener('click', () => {
+        showDisciplinasMainList();
+        irParaNivel(1);
+    });
 
     btnDeleteDisciplinaAtual.addEventListener('click', () => {
         if (state.currentDisciplinaId) deleteDisciplina(state.currentDisciplinaId);
@@ -866,7 +857,7 @@ function openDisciplinaDetalhes(id) {
     document.getElementById('disciplina-detalhes-container').classList.remove('hidden');
     document.getElementById('detalhe-disciplina-nome').textContent = disciplina.nome;
     renderTree();
-    empilharBackBuffer();
+    irParaNivel(2);
 }
 // Exposta em window: é chamada via onclick inline no card, e em módulos ES
 // as funções não viram globais automaticamente.
@@ -894,6 +885,7 @@ function deleteDisciplina(id) {
     // Se a disciplina excluída era a que estava aberta, volta pra lista principal
     if (state.currentDisciplinaId === id) {
         showDisciplinasMainList();
+        irParaNivel(1);
     } else {
         renderDisciplinas();
     }
