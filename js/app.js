@@ -292,7 +292,10 @@ function drawRoundedRectTop(ctx, x, y, w, h, r) {
 function drawDonutChart(canvasId, percentual, cor) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    const size = 160;
+    const wrapper = canvas.parentElement;
+    // O tamanho segue o wrapper (que encolhe em telas estreitas via max-width),
+    // limitado a 160px, evitando que o canvas fique maior que a área disponível.
+    const size = Math.max(Math.min(wrapper.clientWidth || 160, 160), 40);
     const dpr = window.devicePixelRatio || 1;
     canvas.style.width = size + 'px';
     canvas.style.height = size + 'px';
@@ -363,51 +366,62 @@ function drawBarChart(canvasId, itens, { height = 220, suffix = '' } = {}) {
 }
 
 // Gráfico de barras horizontais (usado no progresso por disciplina)
+// Layout em duas linhas por item: nome + percentual em cima, barra embaixo.
+// Isso dá ao nome da disciplina a largura inteira do card, evitando cortes.
 function drawHorizontalBarChart(canvasId, itens) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    const alturaLinha = 36;
-    const height = Math.max(itens.length * alturaLinha + 10, 60);
+    const alturaLinha = 50;
+    const height = Math.max(itens.length * alturaLinha + 6, 60);
     const { ctx, width } = setupCanvasHiDPI(canvas, height);
     ctx.clearRect(0, 0, width, height);
     if (itens.length === 0) return;
 
-    const larguraRotulo = Math.min(120, width * 0.35);
-    const larguraTrilha = width - larguraRotulo - 46;
     const corTexto = getCSSVar('--text-primary');
     const corTrilha = getCSSVar('--border-default');
+    const alturaBarra = 10;
 
-    ctx.textBaseline = 'middle';
-    ctx.font = '12px Inter, sans-serif';
+    ctx.textBaseline = 'alphabetic';
 
     itens.forEach((item, i) => {
-        const y = i * alturaLinha + alturaLinha / 2;
-        const alturaBarra = 10;
-        const yBarra = y - alturaBarra / 2;
+        const yBase = i * alturaLinha;
+        const yLabel = yBase + 15;
+        const yBarra = yBase + 26;
 
-        ctx.fillStyle = corTexto;
+        // percentual (medido primeiro pra reservar espaço e o nome não sobrepor)
+        const textoPct = item.value + '%';
+        ctx.font = '600 12px Inter, sans-serif';
+        const larguraPct = ctx.measureText(textoPct).width;
+
+        // nome da disciplina, agora com a largura inteira do card disponível
+        ctx.font = '500 13px Inter, sans-serif';
         ctx.textAlign = 'left';
+        ctx.fillStyle = corTexto;
+        const larguraDisponivelNome = width - larguraPct - 14;
         let nome = item.label;
-        while (ctx.measureText(nome).width > larguraRotulo - 10 && nome.length > 1) {
+        while (ctx.measureText(nome).width > larguraDisponivelNome && nome.length > 1) {
             nome = nome.slice(0, -1);
         }
         if (nome !== item.label) nome = nome.slice(0, -1) + '…';
-        ctx.fillText(nome, 0, y);
+        ctx.fillText(nome, 0, yLabel);
 
+        // percentual alinhado à direita
+        ctx.font = '600 12px Inter, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(textoPct, width, yLabel);
+
+        // trilha (ocupa a largura inteira)
         ctx.fillStyle = corTrilha;
-        drawRoundedRect(ctx, larguraRotulo, yBarra, larguraTrilha, alturaBarra, 5);
+        drawRoundedRect(ctx, 0, yBarra, width, alturaBarra, 5);
         ctx.fill();
 
-        const larguraProgresso = (item.value / 100) * larguraTrilha;
+        // progresso
+        const larguraProgresso = (item.value / 100) * width;
         if (larguraProgresso > 0) {
             ctx.fillStyle = item.color;
-            drawRoundedRect(ctx, larguraRotulo, yBarra, Math.max(larguraProgresso, 6), alturaBarra, 5);
+            drawRoundedRect(ctx, 0, yBarra, Math.max(larguraProgresso, 6), alturaBarra, 5);
             ctx.fill();
         }
-
-        ctx.fillStyle = corTexto;
-        ctx.textAlign = 'right';
-        ctx.fillText(item.value + '%', width, y);
     });
 }
 
