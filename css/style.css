@@ -85,7 +85,7 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
 .app-main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
 .view-section { display: none; }
 .view-section.active { display: block; }
-.search-card { position: relative; z-index: 110; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+.search-card { position: relative; z-index: 110; padding: 0.45rem 0.875rem; margin-bottom: 0.75rem; }
 .view-header { margin-bottom: 0.5rem; }
 .view-header h2 { font-size: 1.5rem; font-weight: 600; margin: 0; }
 .view-subtitle { color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.2rem; margin-bottom: 0; }
@@ -240,6 +240,19 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
 .assunto-checkbox:checked { background-color: var(--success-green); border-color: var(--success-green); }
 .assunto-checkbox:checked::after { content: ''; width: 5px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-0.5px, -0.5px); }
 .tree-leaf.concluido { opacity: 0.65; color: var(--success-text); }
+
+/* Destaque temporário de item encontrado pela busca */
+@keyframes highlight-pulse {
+    0%   { box-shadow: 0 0 0 3px var(--accent), 0 0 12px 4px rgba(47,129,247,0.35); }
+    60%  { box-shadow: 0 0 0 3px var(--accent), 0 0 12px 4px rgba(47,129,247,0.35); }
+    100% { box-shadow: none; }
+}
+.item-destacado {
+    animation: highlight-pulse 2s ease-out forwards;
+    border-radius: 6px;
+    position: relative;
+    z-index: 1;
+}
 
 /* Bottom sheet de ações, acionado por toque longo num card de disciplina
    ou item da árvore de assuntos. */
