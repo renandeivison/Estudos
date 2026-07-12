@@ -1315,25 +1315,30 @@ function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
         const novoTop = e.clientY - offsetY;
         itemArrastado.style.top = novoTop + 'px';
 
-        // Descobre entre quais irmãos o placeholder deve ir
-        const centroItem = e.clientY;
-        const irmaos = getIrmaos();
+        // Pega só os irmãos reais (exclui o placeholder e o item arrastado)
+        const irmaos = Array.from(containerEl.children).filter(
+            el => el !== placeholder && el !== itemArrastado && el.matches(itemSelector)
+        );
 
-        for (let i = 0; i < irmaos.length; i++) {
-            const irmao = irmaos[i];
+        // Encontra antes de qual irmão o placeholder deve ficar
+        let novoAntes = null; // null = vai pro final
+        for (const irmao of irmaos) {
             const rect = irmao.getBoundingClientRect();
-            const meio = rect.top + rect.height / 2;
-
-            if (centroItem < meio) {
-                if (placeholder.nextSibling !== irmao && placeholder !== irmao) {
-                    containerEl.insertBefore(placeholder, irmao);
-                }
-                return;
+            // Usa o centro do dedo vs o centro de cada irmão
+            if (e.clientY < rect.top + rect.height / 2) {
+                novoAntes = irmao;
+                break;
             }
         }
-        // Passou de todos — vai pro final
-        if (containerEl.lastElementChild !== placeholder) {
-            containerEl.appendChild(placeholder);
+
+        // Só move o placeholder se a posição mudou — evita reflow desnecessário
+        const placeholderAntes = placeholder.nextElementSibling;
+        if (novoAntes !== placeholderAntes) {
+            if (novoAntes === null) {
+                containerEl.appendChild(placeholder);
+            } else {
+                containerEl.insertBefore(placeholder, novoAntes);
+            }
         }
     }
 
