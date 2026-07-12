@@ -79,22 +79,20 @@
             
             <div class="card search-card">
                 <div class="search-wrapper">
-                    <svg viewBox="0 0 16 16" width="16" height="16" class="search-icon"><path d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.49 3.49a.75.75 0 1 1-1.06 1.06l-3.49-3.49Zm-4.68 1.26a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Z"></path></svg>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     <input type="text" id="global-search" placeholder="Pesquisar em milhares de tópicos instantaneamente...">
                 </div>
                 <div id="search-results" class="search-results-dropdown hidden"></div>
             </div>
 
             <div id="disciplinas-list-container">
-                <div class="view-header section-with-action">
-                    <div>
-                        <h2>Disciplinas</h2>
-                        <p class="view-subtitle">Gerencie as matérias e acompanhe seu progresso geral.</p>
-                    </div>
-                    <div class="action-buttons-group">
-                        <button id="btn-import-edital" class="btn btn-secondary">Importar edital</button>
-                        <button id="btn-new-disciplina" class="btn btn-primary">Nova disciplina</button>
-                    </div>
+                <div class="view-header">
+                    <h2>Disciplinas</h2>
+                    <p class="view-subtitle">Gerencie as matérias e acompanhe seu progresso geral.</p>
+                </div>
+                <div class="action-buttons-group action-buttons-row">
+                    <button id="btn-new-disciplina" class="btn btn-primary">Nova disciplina</button>
+                    <button id="btn-mais-opcoes" class="btn btn-secondary btn-icon-only" aria-label="Mais opções" title="Mais opções">⋯</button>
                 </div>
 
                 <div id="disciplinas-grid" class="disciplinas-grid">
@@ -246,6 +244,8 @@
             <button type="button" class="btn btn-secondary acoes-sheet-cancelar">Cancelar</button>
         </div>
     </div>
+
+    <input type="file" id="input-restaurar-backup" accept="application/json,.json" class="hidden">
 
     <nav class="app-navigation">
         <ul class="nav-list">
