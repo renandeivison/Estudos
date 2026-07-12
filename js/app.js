@@ -1309,31 +1309,45 @@ function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
         }
     }, true);
 
+    let prevY = 0;
+
     function onMove(e) {
         if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
 
-        const novoTop = e.clientY - offsetY;
-        itemArrastado.style.top = novoTop + 'px';
+        // Move o item flutuante junto com o dedo/mouse
+        itemArrastado.style.top = (e.clientY - offsetY) + 'px';
 
-        // Pega só os irmãos reais (exclui o placeholder e o item arrastado)
+        const direcao = e.clientY > prevY ? 1 : -1; // 1 = descendo, -1 = subindo
+        prevY = e.clientY;
+
+        // Irmãos reais: exclui o placeholder e o item arrastado (que está fixed)
         const irmaos = Array.from(containerEl.children).filter(
             el => el !== placeholder && el !== itemArrastado && el.matches(itemSelector)
         );
 
-        // Encontra antes de qual irmão o placeholder deve ficar
-        let novoAntes = null; // null = vai pro final
+        // Algoritmo do SortableJS: compara o ponteiro com o terço superior/inferior
+        // de cada irmão levando em conta a direção do movimento.
+        // - Descendo: só ultrapassa o irmão quando o ponteiro passa dos 2/3 dele
+        // - Subindo:  só volta quando o ponteiro sobe acima de 1/3 dele
+        // Isso cria uma zona morta de 33% no meio que absorve micro-oscilações
+        // e evita o placeholder ficar "preso" quando muda de lado.
+        let novoAntes = null; // null = vai pro final do container
+
         for (const irmao of irmaos) {
             const rect = irmao.getBoundingClientRect();
-            // Usa o centro do dedo vs o centro de cada irmão
-            if (e.clientY < rect.top + rect.height / 2) {
+            const limiar = direcao === 1
+                ? rect.top + rect.height * 0.66  // descendo: ultrapassa depois de 66%
+                : rect.top + rect.height * 0.33; // subindo:  volta antes de 33%
+
+            if (e.clientY < limiar) {
                 novoAntes = irmao;
                 break;
             }
         }
 
-        // Só move o placeholder se a posição mudou — evita reflow desnecessário
-        const placeholderAntes = placeholder.nextElementSibling;
-        if (novoAntes !== placeholderAntes) {
+        // Só reordena o DOM se o slot alvo mudou — evita reflow desnecessário
+        const slotAtual = placeholder.nextElementSibling;
+        if (novoAntes !== slotAtual) {
             if (novoAntes === null) {
                 containerEl.appendChild(placeholder);
             } else {
