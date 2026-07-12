@@ -1265,9 +1265,11 @@ function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = 
 // ":scope >" ali simplesmente nunca casava com nada.
 function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
     let itemArrastado = null;
+    let placeholder = null;
     let pointerIdAtivo = null;
+    let offsetY = 0;
 
-    const getIrmaos = () => Array.from(containerEl.children).filter(el => el.matches(itemSelector));
+    const getIrmaos = () => Array.from(containerEl.children).filter(el => el.matches(itemSelector) && el !== placeholder);
     const opts = signal ? { signal } : {};
 
     containerEl.addEventListener('pointerdown', (e) => {
@@ -1279,9 +1281,19 @@ function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
         e.preventDefault();
         e.stopPropagation();
 
+        const rect = item.getBoundingClientRect();
+        offsetY = e.clientY - rect.top;
+
+        // Placeholder: ocupa o espaço do item no DOM enquanto ele flutua
+        placeholder = document.createElement('div');
+        placeholder.style.cssText = `height:${rect.height}px;border:2px dashed var(--accent);border-radius:6px;background:rgba(47,129,247,0.07);box-sizing:border-box;`;
+        item.parentNode.insertBefore(placeholder, item.nextSibling);
+
+        // Sai do fluxo e flutua sobre os irmãos
+        item.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:999;pointer-events:none;`;
+
         itemArrastado = item;
         pointerIdAtivo = e.pointerId;
-        item.setPointerCapture(e.pointerId);
         item.classList.add('sendo-arrastado');
         document.body.classList.add('arrastando-item');
 
@@ -1290,8 +1302,6 @@ function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
         window.addEventListener('pointercancel', onUp);
     }, opts);
 
-    // Bloqueia também o "click" na alça, pra não disparar o toggle nativo
-    // do <summary> (expandir/recolher) nem abrir a disciplina sem querer.
     containerEl.addEventListener('click', (e) => {
         if (e.target.closest('.drag-handle')) {
             e.preventDefault();
@@ -1301,27 +1311,44 @@ function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
 
     function onMove(e) {
         if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
-        const y = e.clientY;
 
-        for (const irmao of getIrmaos()) {
-            if (irmao === itemArrastado) continue;
+        const novoTop = e.clientY - offsetY;
+        itemArrastado.style.top = novoTop + 'px';
+
+        // Descobre entre quais irmãos o placeholder deve ir
+        const centroItem = e.clientY;
+        const irmaos = getIrmaos();
+
+        for (let i = 0; i < irmaos.length; i++) {
+            const irmao = irmaos[i];
             const rect = irmao.getBoundingClientRect();
             const meio = rect.top + rect.height / 2;
-            if (y < meio && irmao.previousElementSibling !== itemArrastado) {
-                containerEl.insertBefore(itemArrastado, irmao);
-                break;
-            } else if (y >= meio && irmao.nextElementSibling !== itemArrastado) {
-                containerEl.insertBefore(itemArrastado, irmao.nextSibling);
-                break;
+
+            if (centroItem < meio) {
+                if (placeholder.nextSibling !== irmao && placeholder !== irmao) {
+                    containerEl.insertBefore(placeholder, irmao);
+                }
+                return;
             }
+        }
+        // Passou de todos — vai pro final
+        if (containerEl.lastElementChild !== placeholder) {
+            containerEl.appendChild(placeholder);
         }
     }
 
     function onUp(e) {
         if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
+
+        // Devolve o item ao fluxo normal, no lugar do placeholder
+        itemArrastado.style.cssText = '';
         itemArrastado.classList.remove('sendo-arrastado');
+        placeholder.parentNode.insertBefore(itemArrastado, placeholder);
+        placeholder.remove();
+        placeholder = null;
+
         document.body.classList.remove('arrastando-item');
-        try { itemArrastado.releasePointerCapture(pointerIdAtivo); } catch (err) { /* já liberado */ }
+        try { itemArrastado.releasePointerCapture(pointerIdAtivo); } catch (_) {}
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onUp);
