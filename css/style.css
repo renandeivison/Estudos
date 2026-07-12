@@ -67,7 +67,6 @@ html[data-theme="light"] .btn-primary { background-color: #1f883d; }
 .btn-link { background: transparent; border: none; color: var(--accent); padding: 0; font-size: 0.875rem; cursor: pointer; }
 .section-with-action { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .action-buttons-group { display: flex; gap: 0.5rem; }
-.action-buttons-row { margin-bottom: 1.5rem; }
 .btn-icon-only { flex-shrink: 0; width: 2.5rem; padding: 0.5rem 0; text-align: center; font-size: 1.25rem; line-height: 1; }
 .action-buttons-row #btn-new-disciplina { flex: 1; }
 
@@ -86,9 +85,11 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
 .app-main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
 .view-section { display: none; }
 .view-section.active { display: block; }
-.view-header { margin-bottom: 1.5rem; }
+.search-card { position: relative; z-index: 110; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+.view-header { margin-bottom: 0.25rem; }
 .view-header h2 { font-size: 1.5rem; font-weight: 600; }
-.view-subtitle { color: var(--text-secondary); font-size: 0.875rem; }
+.view-subtitle { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.75rem; }
+.action-buttons-row { margin-bottom: 1.25rem; }
 
 .card { background-color: var(--card-bg); border: 1px solid var(--border-default); border-radius: 6px; padding: 1.25rem; position: relative; }
 .disciplinas-grid { display: flex; flex-direction: column; gap: 1rem; }
@@ -130,8 +131,7 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
     outline: 2px solid var(--accent);
     outline-offset: -1px;
     background-color: var(--card-bg);
-    transform: scale(1.02) rotate(-1deg);
-    transition: transform 0.1s ease;
+    transform: scale(1.02);
 }
 body.arrastando-item { cursor: grabbing; }
 body.arrastando-item * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
@@ -211,7 +211,6 @@ body.arrastando-item * { cursor: grabbing !important; user-select: none !importa
 /* ==========================================================================
    PESQUISA & ÁRVORE DE ASSUNTOS
    ========================================================================== */
-.search-card { position: relative; z-index: 110; padding: 0.75rem 1rem; margin-bottom: 1.5rem; }
 .search-wrapper { display: flex; align-items: center; gap: 0.75rem; }
 .search-icon { color: var(--text-secondary); flex-shrink: 0; }
 #global-search { width: 100%; background: transparent; border: none; color: var(--text-primary); font-size: 0.9375rem; outline: none; }
