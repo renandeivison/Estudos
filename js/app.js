@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initAssuntos();
     initImportador();
     initSearchEngine();
+    initMenuAcoes();
     initPWA();
     updateDashboard();
 });
@@ -685,18 +686,24 @@ function animateValue(id, end, suffix = '') {
     window.requestAnimationFrame(step);
 }
 
+let disciplinaEditandoId = null;
+
 function initDisciplinas() {
     const btnNewDisciplina = document.getElementById('btn-new-disciplina');
     const modal = document.getElementById('modal-disciplina');
+    const modalTitulo = document.getElementById('modal-disciplina-titulo');
     const closeModalBtns = document.querySelectorAll('.close-modal-btn');
     const formDisciplina = document.getElementById('form-disciplina');
 
     btnNewDisciplina.addEventListener('click', () => {
+        disciplinaEditandoId = null;
+        modalTitulo.textContent = 'Nova Disciplina';
+        formDisciplina.querySelector('button[type="submit"]').textContent = 'Salvar';
         modal.classList.add('active');
         document.getElementById('disciplina-nome').focus();
     });
 
-    const closeModal = () => { modal.classList.remove('active'); formDisciplina.reset(); };
+    const closeModal = () => { modal.classList.remove('active'); formDisciplina.reset(); disciplinaEditandoId = null; };
     closeModalBtns.forEach(btn => btn.addEventListener('click', closeModal));
 
     formDisciplina.addEventListener('submit', (e) => {
@@ -706,13 +713,47 @@ function initDisciplinas() {
 
         if (!nome) return;
 
-        state.disciplinas.push({ id: 'disc_' + Date.now(), nome: nome, cor: cor, progresso: 0, qtdAssuntos: 0, assuntos: [] });
+        if (disciplinaEditandoId) {
+            const disc = state.disciplinas.find(d => d.id === disciplinaEditandoId);
+            if (disc) {
+                disc.nome = nome;
+                disc.cor = cor;
+            }
+        } else {
+            state.disciplinas.push({ id: 'disc_' + Date.now(), nome: nome, cor: cor, progresso: 0, qtdAssuntos: 0, assuntos: [] });
+        }
+
         saveStateAndRefresh();
         renderDisciplinas();
+        // Se a disciplina editada é a que está aberta no momento, atualiza o título na tela de detalhes
+        if (disciplinaEditandoId && state.currentDisciplinaId === disciplinaEditandoId) {
+            document.getElementById('detalhe-disciplina-nome').textContent = nome;
+        }
         closeModal();
     });
 
     renderDisciplinas();
+
+    // Conectado uma única vez aqui (não a cada renderDisciplinas): o grid em
+    // si nunca é recriado, só o innerHTML dele muda, então isso evita
+    // acumular listeners de arraste duplicados a cada renderização.
+    tornarReordenavel(document.getElementById('disciplinas-grid'), '.disciplina-card', (novaOrdemIds) => {
+        state.disciplinas.sort((a, b) => novaOrdemIds.indexOf(a.id) - novaOrdemIds.indexOf(b.id));
+        saveStateAndRefresh();
+    });
+}
+
+function editarDisciplina(id) {
+    const disc = state.disciplinas.find(d => d.id === id);
+    if (!disc) return;
+
+    disciplinaEditandoId = id;
+    document.getElementById('modal-disciplina-titulo').textContent = 'Editar Disciplina';
+    document.getElementById('disciplina-nome').value = disc.nome;
+    document.getElementById('disciplina-cor').value = disc.cor;
+    document.querySelector('#form-disciplina button[type="submit"]').textContent = 'Salvar alterações';
+    document.getElementById('modal-disciplina').classList.add('active');
+    document.getElementById('disciplina-nome').focus();
 }
 
 function initAssuntos() {
@@ -727,6 +768,16 @@ function initAssuntos() {
 
     btnDeleteDisciplinaAtual.addEventListener('click', () => {
         if (state.currentDisciplinaId) deleteDisciplina(state.currentDisciplinaId);
+    });
+
+    // Conectado uma única vez aqui (não a cada renderTree): a raiz da árvore
+    // nunca é recriada, só o innerHTML dela muda, então isso evita acumular
+    // listeners de arraste duplicados a cada renderização. Os grupos
+    // aninhados (.tree-children) são recriados a cada render, então esses
+    // são conectados dentro do próprio renderTree.
+    tornarReordenavel(document.getElementById('assuntos-tree'), ':scope > .tree-node, :scope > .tree-leaf', (novaOrdemIds) => {
+        const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
+        if (disciplina) reordenarNivel(disciplina, null, novaOrdemIds);
     });
 
     formAssunto.addEventListener('submit', (e) => {
@@ -859,8 +910,8 @@ function openDisciplinaDetalhes(id) {
     renderTree();
     irParaNivel(2);
 }
-// Exposta em window: é chamada via onclick inline no card, e em módulos ES
-// as funções não viram globais automaticamente.
+// Exposta em window por segurança (chamada de vários lugares no código);
+// não é mais necessária pra onclick inline, mas mantida por conveniência.
 window.openDisciplinaDetalhes = openDisciplinaDetalhes;
 
 function showDisciplinasMainList() {
@@ -890,13 +941,11 @@ function deleteDisciplina(id) {
         renderDisciplinas();
     }
 }
-// Exposta em window: chamada via onclick inline no card e no botão de exclusão.
+// Exposta em window por segurança (chamada de vários lugares no código);
+// não é mais necessária pra onclick inline, mas mantida por conveniência.
 window.deleteDisciplina = deleteDisciplina;
 
-window.promptAddSubItem = function(event, paiId) {
-    event.stopPropagation();
-    event.preventDefault();
-
+function promptAddSubItem(paiId) {
     const subTitulo = prompt("Digite o nome do sub-assunto ou grupo:");
     if (!subTitulo || !subTitulo.trim()) return;
 
@@ -918,7 +967,32 @@ window.promptAddSubItem = function(event, paiId) {
     recalcularDisciplina(disciplina);
     saveStateAndRefresh();
     renderTree();
-};
+}
+
+function editarAssunto(id) {
+    const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
+    if (!disciplina) return;
+
+    let item = null;
+    const buscar = (itens) => {
+        for (const i of itens) {
+            if (i.id === id) { item = i; return true; }
+            if (i.filhos && i.filhos.length > 0 && buscar(i.filhos)) return true;
+        }
+        return false;
+    };
+    buscar(disciplina.assuntos);
+    if (!item) return;
+
+    const novoTitulo = prompt('Editar assunto:', item.titulo);
+    if (novoTitulo === null) return;
+    const limpo = novoTitulo.trim();
+    if (!limpo) return;
+
+    item.titulo = limpo;
+    saveStateAndRefresh();
+    renderTree();
+}
 
 window.toggleTreeItem = function(id) {
     const d = state.disciplinas.find(disc => disc.id === state.currentDisciplinaId);
@@ -956,10 +1030,7 @@ window.toggleTreeItem = function(id) {
     renderTree();
 };
 
-window.deleteTreeItem = function(event, id) {
-    event.stopPropagation();
-    event.preventDefault();
-
+function deleteTreeItem(id) {
     const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
     if (!disciplina) return;
 
@@ -995,7 +1066,7 @@ window.deleteTreeItem = function(event, id) {
     recalcularDisciplina(disciplina);
     saveStateAndRefresh();
     renderTree();
-};
+}
 
 function recalcularDisciplina(disciplina) {
     let totaisGerais = 0;
@@ -1030,6 +1101,169 @@ function saveStateAndRefresh() {
     updateDashboard();
 }
 
+/**
+ * INTERAÇÕES: TOQUE LONGO, ARRASTAR PRA REORDENAR E MENU DE AÇÕES
+ *
+ * Os antigos botões de "+" e "excluir" dependiam de :hover, que não existe
+ * em telas de toque — ficavam invisíveis mas ainda ocupavam espaço e podiam
+ * ser acionados sem querer. Substituímos por dois gestos:
+ *   - Toque longo (segurar ~500ms parado) no card/item -> abre um menu de
+ *     ações (editar, adicionar sub-assunto, excluir).
+ *   - Arrastar pela alcinha "⠿" (sempre visível) -> reordena os irmãos.
+ */
+
+// Detecta um toque longo num elemento, sem interferir com toques rápidos
+// (tap normal) nem com o gesto de rolar a página.
+function attachLongPress(el, callback, { moveThreshold = 10, duration = 500 } = {}) {
+    let timer = null;
+    let startX = 0, startY = 0;
+    let disparado = false;
+
+    const cancelar = () => {
+        clearTimeout(timer);
+        timer = null;
+    };
+
+    el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.target.closest('.drag-handle, .assunto-checkbox')) return;
+
+        disparado = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        timer = setTimeout(() => {
+            disparado = true;
+            if (navigator.vibrate) navigator.vibrate(15);
+            callback(e);
+        }, duration);
+    });
+
+    el.addEventListener('pointermove', (e) => {
+        if (!timer) return;
+        if (Math.abs(e.clientX - startX) > moveThreshold || Math.abs(e.clientY - startY) > moveThreshold) cancelar();
+    });
+
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => el.addEventListener(evt, cancelar));
+
+    // Depois de um toque longo disparar, o clique/toggle nativo que viria
+    // em seguida (abrir disciplina, expandir/recolher) é bloqueado — o
+    // usuário já está vendo o menu, não queremos as duas coisas juntas.
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('click', (e) => {
+        if (disparado) {
+            e.preventDefault();
+            e.stopPropagation();
+            disparado = false;
+        }
+    }, true);
+}
+
+// Torna os filhos diretos de um container reordenáveis via arraste pela
+// alça ".drag-handle". Ao soltar, chama onReorder() pra persistir a nova
+// ordem (a própria função já reordenou o DOM visualmente durante o arraste).
+function tornarReordenavel(containerEl, itemSelector, onReorder) {
+    let itemArrastado = null;
+    let pointerIdAtivo = null;
+
+    const getIrmaos = () => Array.from(containerEl.querySelectorAll(`:scope > ${itemSelector}`));
+
+    containerEl.addEventListener('pointerdown', (e) => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle || !containerEl.contains(handle)) return;
+        const item = handle.closest(itemSelector);
+        if (!item || item.parentElement !== containerEl) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        itemArrastado = item;
+        pointerIdAtivo = e.pointerId;
+        item.setPointerCapture(e.pointerId);
+        item.classList.add('sendo-arrastado');
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    });
+
+    // Bloqueia também o "click" na alça, pra não disparar o toggle nativo
+    // do <summary> (expandir/recolher) nem abrir a disciplina sem querer.
+    containerEl.addEventListener('click', (e) => {
+        if (e.target.closest('.drag-handle')) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
+    function onMove(e) {
+        if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
+        const y = e.clientY;
+
+        for (const irmao of getIrmaos()) {
+            if (irmao === itemArrastado) continue;
+            const rect = irmao.getBoundingClientRect();
+            const meio = rect.top + rect.height / 2;
+            if (y < meio && irmao.previousElementSibling !== itemArrastado) {
+                containerEl.insertBefore(itemArrastado, irmao);
+                break;
+            } else if (y >= meio && irmao.nextElementSibling !== itemArrastado) {
+                containerEl.insertBefore(itemArrastado, irmao.nextSibling);
+                break;
+            }
+        }
+    }
+
+    function onUp(e) {
+        if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
+        itemArrastado.classList.remove('sendo-arrastado');
+        try { itemArrastado.releasePointerCapture(pointerIdAtivo); } catch (err) { /* já liberado */ }
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+
+        const novaOrdemIds = getIrmaos().map(el => el.dataset.id);
+        itemArrastado = null;
+        pointerIdAtivo = null;
+        onReorder(novaOrdemIds);
+    }
+}
+
+// Abre o bottom sheet de ações com os botões passados em `acoes`.
+function abrirMenuAcoes({ titulo, acoes }) {
+    const modal = document.getElementById('modal-acoes');
+    const tituloEl = document.getElementById('acoes-sheet-titulo');
+    const lista = document.getElementById('acoes-sheet-lista');
+
+    tituloEl.textContent = titulo;
+    lista.innerHTML = '';
+
+    acoes.forEach(acao => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'acao-item' + (acao.perigo ? ' perigo' : '');
+        btn.innerHTML = `<span class="acao-icone">${acao.icone}</span><span>${escapeHTML(acao.label)}</span>`;
+        btn.addEventListener('click', () => {
+            fecharMenuAcoes();
+            acao.onClick();
+        });
+        lista.appendChild(btn);
+    });
+
+    modal.classList.add('active');
+}
+
+function fecharMenuAcoes() {
+    document.getElementById('modal-acoes').classList.remove('active');
+}
+
+function initMenuAcoes() {
+    const modal = document.getElementById('modal-acoes');
+    modal.querySelector('.acoes-sheet-cancelar').addEventListener('click', fecharMenuAcoes);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) fecharMenuAcoes();
+    });
+}
+
 function renderDisciplinas() {
     const grid = document.getElementById('disciplinas-grid');
     if (!grid) return;
@@ -1040,9 +1274,11 @@ function renderDisciplinas() {
     }
 
     grid.innerHTML = state.disciplinas.map(disc => `
-        <div class="card disciplina-card" style="border-left-color: ${disc.cor}" onclick="openDisciplinaDetalhes('${disc.id}')">
-            <button class="btn-delete-icon disciplina-delete-btn" onclick="event.stopPropagation(); deleteDisciplina('${disc.id}')" aria-label="Excluir disciplina" title="Excluir disciplina">🗑</button>
-            <h3>${escapeHTML(disc.nome)}</h3>
+        <div class="card disciplina-card" data-id="${disc.id}" style="border-left-color: ${disc.cor}">
+            <div class="disciplina-card-header">
+                <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar">⠿</button>
+                <h3 class="disciplina-card-titulo">${escapeHTML(disc.nome)}</h3>
+            </div>
             <div class="disciplina-meta">
                 <span>Assuntos: <strong>${disc.qtdAssuntos}</strong></span>
                 <span>Progresso: <strong>${disc.progresso}%</strong></span>
@@ -1050,6 +1286,32 @@ function renderDisciplinas() {
             <div class="progress-container"><div class="progress-bar" style="width: ${disc.progresso}%; background-color: ${disc.cor}"></div></div>
         </div>
     `).join('');
+
+    grid.querySelectorAll('.disciplina-card').forEach(card => {
+        const id = card.dataset.id;
+
+        // A ordem importa: dois listeners de "click" no MESMO elemento disparam
+        // na ordem em que foram registrados, então o bloqueio de clique do
+        // toque longo precisa ser registrado ANTES do clique que abre a
+        // disciplina — senão o toque longo abriria a disciplina e mostraria
+        // o menu ao mesmo tempo.
+        attachLongPress(card, () => {
+            const disc = state.disciplinas.find(d => d.id === id);
+            if (!disc) return;
+            abrirMenuAcoes({
+                titulo: disc.nome,
+                acoes: [
+                    { label: 'Editar disciplina', icone: '✏️', onClick: () => editarDisciplina(id) },
+                    { label: 'Excluir disciplina', icone: '🗑', perigo: true, onClick: () => deleteDisciplina(id) }
+                ]
+            });
+        });
+
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.drag-handle')) return;
+            openDisciplinaDetalhes(id);
+        });
+    });
 }
 
 function renderTree() {
@@ -1077,37 +1339,90 @@ function renderTree() {
             const pctLocal = totalFilhosFinais > 0 ? Math.round((concluidosFilhosFinais / totalFilhosFinais) * 100) : 0;
 
             return `
-                <div class="tree-node">
+                <div class="tree-node" data-id="${item.id}">
                     <details class="tree-details" open>
                         <summary class="tree-summary">
+                            <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar">⠿</button>
                             <div class="summary-content">
                                 <span class="summary-toggle-icon">▶</span>
                                 <input type="checkbox" class="assunto-checkbox" ${item.concluido ? 'checked' : ''} onclick="event.stopPropagation(); toggleTreeItem('${item.id}')">
                                 <span style="text-decoration: ${item.concluido ? 'line-through' : 'none'}; opacity: ${item.concluido ? 0.6 : 1}">${escapeHTML(item.titulo)}</span>
                             </div>
-                            <div style="display:flex; align-items:center; gap:0.5rem;">
-                                <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
-                                <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')" title="Adicionar sub-assunto">+</button>
-                                <button class="btn-delete-item" onclick="deleteTreeItem(event, '${item.id}')" title="Excluir">🗑</button>
-                            </div>
+                            <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
                         </summary>
-                        <div class="tree-children">${item.filhos.map(gerarHTMLNo).join('')}</div>
+                        <div class="tree-children" data-parent-id="${item.id}">${item.filhos.map(gerarHTMLNo).join('')}</div>
                     </details>
                 </div>
             `;
         } else {
             return `
-                <div class="tree-leaf ${item.concluido ? 'concluido' : ''}">
+                <div class="tree-leaf ${item.concluido ? 'concluido' : ''}" data-id="${item.id}">
+                    <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar">⠿</button>
                     <input type="checkbox" class="assunto-checkbox" id="${item.id}" ${item.concluido ? 'checked' : ''} onclick="toggleTreeItem('${item.id}')">
                     <label for="${item.id}">${escapeHTML(item.titulo)}</label>
-                    <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')" title="Adicionar sub-assunto">+</button>
-                    <button class="btn-delete-item" onclick="deleteTreeItem(event, '${item.id}')" title="Excluir">🗑</button>
                 </div>
             `;
         }
     };
 
     container.innerHTML = disciplina.assuntos.map(gerarHTMLNo).join('');
+
+    // Toque longo em qualquer item (nó ou folha) -> menu de ações
+    container.querySelectorAll('.tree-node, .tree-leaf').forEach(itemEl => {
+        const id = itemEl.dataset.id;
+        const alvo = itemEl.classList.contains('tree-node')
+            ? itemEl.querySelector(':scope > .tree-details > .tree-summary')
+            : itemEl;
+
+        attachLongPress(alvo, () => {
+            let item = null;
+            const buscar = (itens) => {
+                for (const i of itens) {
+                    if (i.id === id) { item = i; return true; }
+                    if (i.filhos && i.filhos.length > 0 && buscar(i.filhos)) return true;
+                }
+                return false;
+            };
+            buscar(disciplina.assuntos);
+            if (!item) return;
+
+            abrirMenuAcoes({
+                titulo: item.titulo,
+                acoes: [
+                    { label: 'Adicionar sub-assunto', icone: '➕', onClick: () => promptAddSubItem(id) },
+                    { label: 'Editar', icone: '✏️', onClick: () => editarAssunto(id) },
+                    { label: 'Excluir', icone: '🗑', perigo: true, onClick: () => deleteTreeItem(id) }
+                ]
+            });
+        });
+    });
+
+    // Arrastar pra reordenar, dentro de cada nível (raiz + cada grupo de filhos)
+    container.querySelectorAll('.tree-children').forEach(nivel => {
+        tornarReordenavel(nivel, ':scope > .tree-node, :scope > .tree-leaf', (novaOrdemIds) => {
+            reordenarNivel(disciplina, nivel.dataset.parentId, novaOrdemIds);
+        });
+    });
+}
+
+// Reordena o array de assuntos (raiz, quando parentId é null/undefined) ou
+// os filhos de um item específico, de acordo com a nova ordem de ids.
+function reordenarNivel(disciplina, parentId, novaOrdemIds) {
+    const arrayAlvo = parentId ? encontrarFilhosPorId(disciplina.assuntos, parentId) : disciplina.assuntos;
+    if (!arrayAlvo) return;
+    arrayAlvo.sort((a, b) => novaOrdemIds.indexOf(a.id) - novaOrdemIds.indexOf(b.id));
+    saveStateAndRefresh();
+}
+
+function encontrarFilhosPorId(itens, id) {
+    for (const item of itens) {
+        if (item.id === id) return item.filhos;
+        if (item.filhos && item.filhos.length > 0) {
+            const achado = encontrarFilhosPorId(item.filhos, id);
+            if (achado) return achado;
+        }
+    }
+    return null;
 }
 
 window.goToSearchTarget = function(disciplinaId) {
