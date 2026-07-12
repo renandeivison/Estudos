@@ -956,7 +956,7 @@ function initSearchEngine() {
             const regex = new RegExp(`(${query})`, 'gi');
             const tituloDestacado = escapeHTML(item.titulo).replace(regex, '<mark>$1</mark>');
             return `
-                <div class="search-result-item" onclick="goToSearchTarget('${item.disciplinaId}')">
+                <div class="search-result-item" onclick="goToSearchTarget('${item.disciplinaId}', '${item.id}')">
                     <div class="search-result-text">${tituloDestacado}</div>
                     <span class="search-result-discipline" style="background-color: ${item.disciplinaCor}20; color: ${item.disciplinaCor}; border: 1px solid ${item.disciplinaCor}40">
                         ${escapeHTML(item.disciplinaNome)}
@@ -1583,12 +1583,41 @@ function encontrarFilhosPorId(itens, id) {
     return null;
 }
 
-window.goToSearchTarget = function(disciplinaId) {
+window.goToSearchTarget = function(disciplinaId, itemId) {
     document.getElementById('global-search').value = '';
     document.getElementById('search-results').classList.add('hidden');
+
     const btnNav = document.querySelector('.nav-link[data-target="disciplinas"]');
     if (btnNav) btnNav.click();
     openDisciplinaDetalhes(disciplinaId);
+
+    // Após abrir a disciplina, rola até o item e o destaca.
+    // Usa requestAnimationFrame duplo para garantir que o renderTree() terminou
+    // e o DOM da árvore já está no documento antes de tentar localizar o elemento.
+    if (!itemId) return;
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            // O item pode ser uma .tree-leaf ou um .tree-node — o data-id está
+            // no elemento raiz de ambos.
+            const el = document.querySelector(`[data-id="${itemId}"]`);
+            if (!el) return;
+
+            // Garante que todos os <details> ancestrais estejam abertos
+            let pai = el.parentElement;
+            while (pai) {
+                if (pai.tagName === 'DETAILS') pai.open = true;
+                pai = pai.parentElement;
+            }
+
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Destaque visual por 2 segundos (animation definida no CSS)
+            el.classList.remove('item-destacado');
+            void el.offsetWidth; // força reflow para reiniciar a animação se chamado duas vezes
+            el.classList.add('item-destacado');
+            setTimeout(() => el.classList.remove('item-destacado'), 2200);
+        });
+    });
 };
 
 function escapeHTML(str) {
