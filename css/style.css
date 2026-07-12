@@ -89,7 +89,7 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
 /* Ajustado para controlar e limitar a altura da barra de pesquisa */
 .search-card { 
     position: relative; 
-    z-index: 110; 
+    z-index: 80; 
     padding: 0.5rem 0.875rem !important; 
     margin-bottom: 0.75rem;
     min-height: 38px !important;
