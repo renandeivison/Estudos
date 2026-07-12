@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initDisciplinas();
     initAssuntos();
     initImportador();
+    initMaisOpcoes();
+    initBackupRestore();
     initSearchEngine();
     initMenuAcoes();
     initPWA();
@@ -775,7 +777,7 @@ function initAssuntos() {
     // listeners de arraste duplicados a cada renderização. Os grupos
     // aninhados (.tree-children) são recriados a cada render, então esses
     // são conectados dentro do próprio renderTree.
-    tornarReordenavel(document.getElementById('assuntos-tree'), ':scope > .tree-node, :scope > .tree-leaf', (novaOrdemIds) => {
+    tornarReordenavel(document.getElementById('assuntos-tree'), '.tree-node, .tree-leaf', (novaOrdemIds) => {
         const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
         if (disciplina) reordenarNivel(disciplina, null, novaOrdemIds);
     });
@@ -801,13 +803,11 @@ function initAssuntos() {
 }
 
 function initImportador() {
-    const btnImport = document.getElementById('btn-import-edital');
     const modalImport = document.getElementById('modal-importacao');
     const closeImportBtns = document.querySelectorAll('.close-import-btn');
     const formImport = document.getElementById('form-importacao');
     const importText = document.getElementById('import-text');
 
-    btnImport.addEventListener('click', () => { modalImport.classList.add('active'); importText.focus(); });
     const closeImportModal = () => { modalImport.classList.remove('active'); formImport.reset(); };
     closeImportBtns.forEach(btn => btn.addEventListener('click', closeImportModal));
 
@@ -843,6 +843,86 @@ function initImportador() {
         saveStateAndRefresh();
         renderDisciplinas();
         closeImportModal();
+    });
+}
+
+/**
+ * MENU "MAIS OPÇÕES" (Importar edital, Exportar/Restaurar backup)
+ */
+function initMaisOpcoes() {
+    const btn = document.getElementById('btn-mais-opcoes');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        abrirMenuAcoes({
+            titulo: 'Mais opções',
+            acoes: [
+                {
+                    label: 'Importar edital',
+                    icone: '📋',
+                    onClick: () => {
+                        document.getElementById('modal-importacao').classList.add('active');
+                        document.getElementById('import-text').focus();
+                    }
+                },
+                { label: 'Exportar backup (.json)', icone: '⬇️', onClick: exportarBackup },
+                { label: 'Restaurar backup', icone: '⬆️', onClick: () => document.getElementById('input-restaurar-backup').click() }
+            ]
+        });
+    });
+}
+
+/**
+ * BACKUP & RESTAURAÇÃO
+ */
+function exportarBackup() {
+    const payload = {
+        app: 'Study Tracker',
+        versao: 1,
+        exportadoEm: new Date().toISOString(),
+        disciplinas: state.disciplinas
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `study-tracker-backup-${getLocalYYYYMMDD()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function initBackupRestore() {
+    const input = document.getElementById('input-restaurar-backup');
+    if (!input) return;
+
+    input.addEventListener('change', (e) => {
+        const arquivo = e.target.files[0];
+        if (!arquivo) return;
+
+        const leitor = new FileReader();
+        leitor.onload = (evt) => {
+            try {
+                const dados = JSON.parse(evt.target.result);
+                const disciplinas = Array.isArray(dados) ? dados : dados.disciplinas;
+                if (!Array.isArray(disciplinas)) throw new Error('Formato inválido');
+
+                const confirmar = confirm(`Restaurar backup com ${disciplinas.length} disciplina(s)? Isso vai SUBSTITUIR todos os dados atuais e não pode ser desfeito.`);
+                if (!confirmar) return;
+
+                state.disciplinas = disciplinas;
+                saveStateAndRefresh();
+                showDisciplinasMainList();
+                alert('Backup restaurado com sucesso!');
+            } catch (err) {
+                alert('Não foi possível ler esse arquivo. Confira se é um backup válido do Study Tracker (.json).');
+            } finally {
+                input.value = '';
+            }
+        };
+        leitor.readAsText(arquivo);
     });
 }
 
@@ -1161,11 +1241,15 @@ function attachLongPress(el, callback, { moveThreshold = 10, duration = 500 } = 
 // Torna os filhos diretos de um container reordenáveis via arraste pela
 // alça ".drag-handle". Ao soltar, chama onReorder() pra persistir a nova
 // ordem (a própria função já reordenou o DOM visualmente durante o arraste).
+// `itemSelector` deve ser um seletor simples (ex: '.tree-node, .tree-leaf'),
+// SEM ":scope >" — ":scope" dentro de .closest() se refere ao próprio
+// elemento em que .closest() foi chamado, não ao container, então usar
+// ":scope >" ali simplesmente nunca casava com nada.
 function tornarReordenavel(containerEl, itemSelector, onReorder) {
     let itemArrastado = null;
     let pointerIdAtivo = null;
 
-    const getIrmaos = () => Array.from(containerEl.querySelectorAll(`:scope > ${itemSelector}`));
+    const getIrmaos = () => Array.from(containerEl.children).filter(el => el.matches(itemSelector));
 
     containerEl.addEventListener('pointerdown', (e) => {
         const handle = e.target.closest('.drag-handle');
@@ -1180,6 +1264,7 @@ function tornarReordenavel(containerEl, itemSelector, onReorder) {
         pointerIdAtivo = e.pointerId;
         item.setPointerCapture(e.pointerId);
         item.classList.add('sendo-arrastado');
+        document.body.classList.add('arrastando-item');
 
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
@@ -1216,6 +1301,7 @@ function tornarReordenavel(containerEl, itemSelector, onReorder) {
     function onUp(e) {
         if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
         itemArrastado.classList.remove('sendo-arrastado');
+        document.body.classList.remove('arrastando-item');
         try { itemArrastado.releasePointerCapture(pointerIdAtivo); } catch (err) { /* já liberado */ }
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
@@ -1399,7 +1485,7 @@ function renderTree() {
 
     // Arrastar pra reordenar, dentro de cada nível (raiz + cada grupo de filhos)
     container.querySelectorAll('.tree-children').forEach(nivel => {
-        tornarReordenavel(nivel, ':scope > .tree-node, :scope > .tree-leaf', (novaOrdemIds) => {
+        tornarReordenavel(nivel, '.tree-node, .tree-leaf', (novaOrdemIds) => {
             reordenarNivel(disciplina, nivel.dataset.parentId, novaOrdemIds);
         });
     });
