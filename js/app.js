@@ -9,6 +9,9 @@ const state = {
 
 let flatSearchIndex = [];
 const PALETA_CORES = ['#2f81f7', '#347d39', '#f28749', '#76e150', '#bc8cff', '#ff7b72', '#f6e05e'];
+// Controllers de drag da árvore — cancelados e recriados a cada renderTree()
+// para evitar acúmulo de listeners nos .tree-children (recriados a cada render)
+let treeDragControllers = [];
 
 // Retorna YYYY-MM-DD com base no horário local
 function getLocalYYYYMMDD(date = new Date()) {
@@ -1194,41 +1197,57 @@ function saveStateAndRefresh() {
 
 // Detecta um toque longo num elemento, sem interferir com toques rápidos
 // (tap normal) nem com o gesto de rolar a página.
-function attachLongPress(el, callback, { moveThreshold = 10, duration = 500 } = {}) {
+function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = {}) {
     let timer = null;
     let startX = 0, startY = 0;
     let disparado = false;
+    let pointerId = null;
 
     const cancelar = () => {
         clearTimeout(timer);
         timer = null;
+        pointerId = null;
     };
 
     el.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.target.closest('.drag-handle, .assunto-checkbox')) return;
+        // Ignora um segundo dedo enquanto já estamos contando
+        if (timer) return;
 
         disparado = false;
+        pointerId = e.pointerId;
         startX = e.clientX;
         startY = e.clientY;
+
         timer = setTimeout(() => {
             disparado = true;
+            timer = null;
             if (navigator.vibrate) navigator.vibrate(15);
             callback(e);
         }, duration);
     });
 
     el.addEventListener('pointermove', (e) => {
-        if (!timer) return;
-        if (Math.abs(e.clientX - startX) > moveThreshold || Math.abs(e.clientY - startY) > moveThreshold) cancelar();
+        if (!timer || e.pointerId !== pointerId) return;
+        const dx = Math.abs(e.clientX - startX);
+        const dy = Math.abs(e.clientY - startY);
+        if (dx > moveThreshold || dy > moveThreshold) cancelar();
     });
 
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => el.addEventListener(evt, cancelar));
+    el.addEventListener('pointerup', (e) => {
+        if (e.pointerId !== pointerId) return;
+        cancelar();
+    });
 
-    // Depois de um toque longo disparar, o clique/toggle nativo que viria
-    // em seguida (abrir disciplina, expandir/recolher) é bloqueado — o
-    // usuário já está vendo o menu, não queremos as duas coisas juntas.
+    el.addEventListener('pointercancel', (e) => {
+        if (e.pointerId !== pointerId) return;
+        cancelar();
+    });
+
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Bloqueia o clique que o sistema gera logo após um toque longo
     el.addEventListener('click', (e) => {
         if (disparado) {
             e.preventDefault();
@@ -1237,7 +1256,6 @@ function attachLongPress(el, callback, { moveThreshold = 10, duration = 500 } = 
         }
     }, true);
 }
-
 // Torna os filhos diretos de um container reordenáveis via arraste pela
 // alça ".drag-handle". Ao soltar, chama onReorder() pra persistir a nova
 // ordem (a própria função já reordenou o DOM visualmente durante o arraste).
@@ -1245,11 +1263,12 @@ function attachLongPress(el, callback, { moveThreshold = 10, duration = 500 } = 
 // SEM ":scope >" — ":scope" dentro de .closest() se refere ao próprio
 // elemento em que .closest() foi chamado, não ao container, então usar
 // ":scope >" ali simplesmente nunca casava com nada.
-function tornarReordenavel(containerEl, itemSelector, onReorder) {
+function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
     let itemArrastado = null;
     let pointerIdAtivo = null;
 
     const getIrmaos = () => Array.from(containerEl.children).filter(el => el.matches(itemSelector));
+    const opts = signal ? { signal } : {};
 
     containerEl.addEventListener('pointerdown', (e) => {
         const handle = e.target.closest('.drag-handle');
@@ -1269,7 +1288,7 @@ function tornarReordenavel(containerEl, itemSelector, onReorder) {
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         window.addEventListener('pointercancel', onUp);
-    });
+    }, opts);
 
     // Bloqueia também o "click" na alça, pra não disparar o toggle nativo
     // do <summary> (expandir/recolher) nem abrir a disciplina sem querer.
@@ -1483,11 +1502,18 @@ function renderTree() {
         });
     });
 
-    // Arrastar pra reordenar, dentro de cada nível (raiz + cada grupo de filhos)
+    // Arrastar pra reordenar nos níveis aninhados (.tree-children é recriado
+    // a cada renderTree, então precisamos cancelar os listeners do render
+    // anterior antes de criar novos, para não acumular e causar flickering).
+    treeDragControllers.forEach(ac => ac.abort());
+    treeDragControllers = [];
+
     container.querySelectorAll('.tree-children').forEach(nivel => {
+        const ac = new AbortController();
+        treeDragControllers.push(ac);
         tornarReordenavel(nivel, '.tree-node, .tree-leaf', (novaOrdemIds) => {
             reordenarNivel(disciplina, nivel.dataset.parentId, novaOrdemIds);
-        });
+        }, ac.signal);
     });
 }
 
