@@ -199,7 +199,7 @@
     <div id="modal-disciplina" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Nova Disciplina</h3>
+                <h3 id="modal-disciplina-titulo">Nova Disciplina</h3>
                 <button class="btn-close close-modal-btn">&times;</button>
             </div>
             <form id="form-disciplina">
@@ -236,6 +236,14 @@
                     <button type="submit" class="btn btn-primary">Processar e Criar Estruturas</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="modal-acoes" class="modal-overlay acoes-overlay">
+        <div class="modal-card acoes-sheet">
+            <h3 id="acoes-sheet-titulo" class="acoes-sheet-titulo"></h3>
+            <div id="acoes-sheet-lista" class="acoes-sheet-lista"></div>
+            <button type="button" class="btn btn-secondary acoes-sheet-cancelar">Cancelar</button>
         </div>
     </div>
 
