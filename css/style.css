@@ -57,7 +57,8 @@ html[data-theme="light"] {
    RESET & CONFIGURAÇÕES GERAIS
    ========================================================================== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg-default); color: var(--text-primary); line-height: 1.5; padding-bottom: 70px; transition: background-color 0.3s, color 0.3s; }
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg-default); color: var(--text-primary); line-height: 1.5; padding-bottom: 70px; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+.nav-link, .nav-link svg, .card, .app-header, .app-navigation, .modal-card { transition: background-color 0.3s, color 0.3s, border-color 0.3s, fill 0.3s; }
 .hidden { display: none !important; }
 
 .btn { font-family: inherit; font-size: 0.875rem; font-weight: 500; padding: 0.375rem 1rem; border-radius: 6px; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; justify-content: center; }
@@ -77,7 +78,7 @@ html[data-theme="light"] .btn-primary { background-color: #1f883d; }
 .header-container { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; max-width: 1200px; margin: 0 auto; }
 .header-actions { display: flex; align-items: center; gap: 0.5rem; }
 .app-logo { font-size: 1rem; color: #ffffff; display: flex; align-items: center; gap: 0.5rem; }
-.btn-theme { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; width: 32px; height: 32px; cursor: pointer; color: #ffffff; }
+.btn-theme { background: transparent; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; width: 32px; height: 32px; cursor: pointer; color: #ffffff; }
 .install-icon { font-size: 0.9rem; line-height: 1; }
 .theme-icon::before { content: "🌙"; }
 html[data-theme="light"] .theme-icon::before { content: "☀️"; }
@@ -110,13 +111,15 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
 
 .card { background-color: var(--card-bg); border: 1px solid var(--border-default); border-radius: 6px; padding: 1.25rem; position: relative; }
 .disciplinas-grid { display: flex; flex-direction: column; gap: 1rem; }
-.disciplina-card { border-left: 6px solid var(--accent); cursor: pointer; }
+.disciplina-card { border-left: 4px solid var(--accent); cursor: pointer; transition: background-color 0.15s; }
+.disciplina-card:active { background-color: var(--btn-secondary-bg); }
 .disciplina-card-header { display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem; }
 .disciplina-card-titulo { flex: 1; }
 .disciplina-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.8125rem; }
-.progress-container { background-color: var(--border-default); border-radius: 3px; height: 8px; overflow: hidden; }
+.progress-container { background-color: var(--border-default); border-radius: 3px; height: 6px; overflow: hidden; }
 .progress-bar { background-color: var(--success-green); height: 100%; width: 0%; transition: width 0.3s; }
-.empty-state { text-align: center; padding: 3rem 1rem; border: 1px dashed var(--border-default); border-radius: 6px; color: var(--text-secondary); }
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-secondary); }
+.empty-state::before { content: '📚'; font-size: 2rem; display: block; margin-bottom: 0.75rem; opacity: 0.5; }
 
 .btn-danger { color: var(--danger); border-color: var(--danger); }
 .btn-danger:hover { background-color: var(--danger-bg); }
@@ -137,8 +140,13 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
     flex-shrink: 0;
     user-select: none;
     -webkit-user-select: none;
+    display: flex;
+    align-items: center;
+    opacity: 0.45;
+    transition: opacity 0.15s;
 }
-.drag-handle:active { cursor: grabbing; background-color: var(--border-default); }
+.drag-handle:hover { opacity: 1; }
+.drag-handle:active { cursor: grabbing; background-color: var(--border-default); opacity: 1; }
 .sendo-arrastado {
     opacity: 1;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 2px var(--accent);
@@ -156,15 +164,16 @@ body.arrastando-item * { cursor: grabbing !important; user-select: none !importa
 .dashboard-summary-card { margin-bottom: 1.5rem; padding: 1.5rem; }
 .dashboard-progress-header { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 0.5rem; }
 .dash-progresso-text { font-size: 3rem; font-weight: 700; color: var(--accent); line-height: 1; }
-.dashboard-progress-container { background-color: var(--border-default); border-radius: 12px; height: 16px; overflow: hidden; position: relative; }
+.dashboard-progress-container { background-color: var(--border-default); border-radius: 12px; height: 6px; overflow: hidden; position: relative; }
 .dashboard-progress-bar { background-color: var(--accent); height: 100%; width: 0%; border-radius: 12px; transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
 .dashboard-metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
 @media (min-width: 768px) { .dashboard-metrics-grid { grid-template-columns: repeat(4, 1fr); } }
 .metric-card { text-align: center; padding: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; justify-content: center; }
-.metric-card h4 { font-size: 0.875rem; color: var(--text-secondary); font-weight: 500; }
+.metric-card h4 { font-size: 0.8125rem; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.01em; }
 .metric-value { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
 .metric-success { color: var(--success-green); }
 .metric-warning { color: #f28749; }
+.dashboard-summary-card h3 { font-size: 0.8125rem; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.01em; margin-bottom: 0.75rem; }
 
 /* ==========================================================================
    CALENDÁRIO HEATMAP (Estilo GitHub)
@@ -250,6 +259,7 @@ body.arrastando-item * { cursor: grabbing !important; user-select: none !importa
 .quick-add-card { padding: 0.75rem 1rem; margin-bottom: 1rem; }
 #form-assunto { display: flex; gap: 0.5rem; }
 #form-assunto input[type="text"] { flex: 1; background-color: var(--input-bg); border: 1px solid var(--border-default); border-radius: 6px; padding: 0.375rem 0.75rem; color: var(--text-primary); font-size: 0.875rem; outline: none; }
+#form-assunto .btn { flex-shrink: 0; padding: 0.375rem 0.75rem; }
 
 .assuntos-tree { display: flex; flex-direction: column; gap: 0.5rem; }
 .tree-node { background-color: var(--card-bg); border: 1px solid var(--border-default); border-radius: 6px; overflow: hidden; }
@@ -287,6 +297,7 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
    ou item da árvore de assuntos. */
 .acoes-overlay { align-items: flex-end; padding: 0; }
 .acoes-sheet { max-width: 500px; margin: 0 auto; border-radius: 16px 16px 0 0; width: 100%; padding-bottom: env(safe-area-inset-bottom, 0); animation: subida-sheet 0.18s ease-out; }
+.acoes-sheet::before { content: ''; display: block; width: 36px; height: 4px; background-color: var(--border-default); border-radius: 2px; margin: 0.75rem auto 0; }
 @keyframes subida-sheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .acoes-sheet-titulo { padding: 1rem 1.25rem 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
 .acoes-sheet-lista { display: flex; flex-direction: column; padding: 0.25rem 0; }
