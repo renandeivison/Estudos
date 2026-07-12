@@ -9,6 +9,9 @@ const state = {
 
 let flatSearchIndex = [];
 const PALETA_CORES = ['#2f81f7', '#347d39', '#f28749', '#76e150', '#bc8cff', '#ff7b72', '#f6e05e'];
+// Controllers de drag da árvore — cancelados e recriados a cada renderTree()
+// para evitar acúmulo de listeners nos .tree-children (recriados a cada render)
+let treeDragControllers = [];
 
 // Retorna YYYY-MM-DD com base no horário local
 function getLocalYYYYMMDD(date = new Date()) {
@@ -31,7 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initDisciplinas();
     initAssuntos();
     initImportador();
+    initMaisOpcoes();
+    initBackupRestore();
     initSearchEngine();
+    initMenuAcoes();
     initPWA();
     updateDashboard();
 });
@@ -131,31 +137,34 @@ function ativarAba(targetView) {
 /**
  * BOTÃO VOLTAR (histórico do navegador / botão físico do celular)
  *
- * Regra:
- *  - Dentro de uma disciplina -> volta para a lista de disciplinas.
- *  - Em qualquer outra aba (Disciplinas, Calendário, Estatísticas) -> volta para o Dashboard.
- *  - No Dashboard -> comportamento padrão do navegador (sai do app).
+ * Modelo de profundidade:
+ *   nível 0 = Dashboard
+ *   nível 1 = qualquer outra aba (Disciplinas, Calendário, Estatísticas)
+ *   nível 2 = dentro do detalhe de uma disciplina
  *
- * Mantemos no máximo UMA entrada extra empilhada no histórico enquanto o
- * usuário está fora do Dashboard. Assim, "voltar" sempre cai exatamente um
- * nível, e no Dashboard não sobra nenhuma entrada extra pra "voltar" agir sobre
- * (o que faz o botão voltar sair do app normalmente, como o usuário espera).
+ * Importante: só empilhamos entradas no histórico em resposta direta a um
+ * clique/toque do usuário (subirNivel/irParaNivel), NUNCA de dentro do
+ * handler de popstate. Isso evita inconsistências com o gesto de "voltar
+ * preditivo" do Android, que precisa que a entrada já exista de antemão —
+ * criá-la só depois que o popstate já disparou pode chegar tarde demais
+ * pro próximo gesto de voltar.
  */
-let backBufferAtivo = false;
+let nivelHistorico = 0;
 let ignorarProximoPopstate = false;
 
-function empilharBackBuffer() {
-    if (!backBufferAtivo) {
-        history.pushState({ studyTrackerApp: true }, '', location.href);
-        backBufferAtivo = true;
-    }
+function subirNivel() {
+    nivelHistorico++;
+    history.pushState({ nivel: nivelHistorico }, '', location.href);
 }
 
-function limparBackBufferSeNecessario() {
-    if (backBufferAtivo) {
+function irParaNivel(alvo) {
+    if (nivelHistorico < alvo) {
+        while (nivelHistorico < alvo) subirNivel();
+    } else if (nivelHistorico > alvo) {
         ignorarProximoPopstate = true;
-        backBufferAtivo = false;
-        history.back();
+        const passos = nivelHistorico - alvo;
+        nivelHistorico = alvo;
+        history.go(-passos);
     }
 }
 
@@ -166,12 +175,7 @@ function initNavigation() {
         link.addEventListener('click', (e) => {
             const targetView = e.currentTarget.getAttribute('data-target');
             ativarAba(targetView);
-
-            if (targetView === 'dashboard') {
-                limparBackBufferSeNecessario();
-            } else {
-                empilharBackBuffer();
-            }
+            irParaNivel(targetView === 'dashboard' ? 0 : 1);
         });
     });
 
@@ -181,28 +185,18 @@ function initNavigation() {
             return;
         }
 
-        // Um popstate real significa que o navegador já consumiu a entrada
-        // que tínhamos empilhado — então o buffer deixou de existir, não
-        // importa o que a variável dizia até aqui. Resetamos antes de tudo
-        // pra não ficarmos "achando" que ainda existe uma entrada quando
-        // na prática ela já foi embora.
-        backBufferAtivo = false;
+        // Um popstate real do usuário sempre desce exatamente 1 nível
+        nivelHistorico = Math.max(0, nivelHistorico - 1);
 
-        // Dentro de uma disciplina -> volta pra lista de disciplinas
+        // Dentro de uma disciplina -> volta pra lista de disciplinas (nível 1)
         if (state.currentDisciplinaId) {
             ativarAba('disciplinas');
-            empilharBackBuffer(); // empilha de novo pra próxima vez que apertar voltar
-            return;
-        }
-
-        // Em qualquer aba que não seja o Dashboard -> volta pro Dashboard
-        const dashboardView = document.getElementById('dashboard-view');
-        const jaEstaNoDashboard = dashboardView && dashboardView.classList.contains('active');
-        if (!jaEstaNoDashboard) {
+        } else if (nivelHistorico === 0) {
+            // Em qualquer aba que não seja o Dashboard -> volta pro Dashboard
             ativarAba('dashboard');
-            // backBufferAtivo já está false: o próximo "voltar" no Dashboard sai do app
         }
-        // Se já estava no Dashboard, não fazemos nada: o navegador segue seu fluxo normal.
+        // Se já estava numa aba não-dashboard sem disciplina aberta, não faz
+        // nada: a tela já está correta, e o próximo "voltar" desce pro Dashboard.
     });
 
     let resizeTimeout;
@@ -697,18 +691,24 @@ function animateValue(id, end, suffix = '') {
     window.requestAnimationFrame(step);
 }
 
+let disciplinaEditandoId = null;
+
 function initDisciplinas() {
     const btnNewDisciplina = document.getElementById('btn-new-disciplina');
     const modal = document.getElementById('modal-disciplina');
+    const modalTitulo = document.getElementById('modal-disciplina-titulo');
     const closeModalBtns = document.querySelectorAll('.close-modal-btn');
     const formDisciplina = document.getElementById('form-disciplina');
 
     btnNewDisciplina.addEventListener('click', () => {
+        disciplinaEditandoId = null;
+        modalTitulo.textContent = 'Nova Disciplina';
+        formDisciplina.querySelector('button[type="submit"]').textContent = 'Salvar';
         modal.classList.add('active');
         document.getElementById('disciplina-nome').focus();
     });
 
-    const closeModal = () => { modal.classList.remove('active'); formDisciplina.reset(); };
+    const closeModal = () => { modal.classList.remove('active'); formDisciplina.reset(); disciplinaEditandoId = null; };
     closeModalBtns.forEach(btn => btn.addEventListener('click', closeModal));
 
     formDisciplina.addEventListener('submit', (e) => {
@@ -718,13 +718,47 @@ function initDisciplinas() {
 
         if (!nome) return;
 
-        state.disciplinas.push({ id: 'disc_' + Date.now(), nome: nome, cor: cor, progresso: 0, qtdAssuntos: 0, assuntos: [] });
+        if (disciplinaEditandoId) {
+            const disc = state.disciplinas.find(d => d.id === disciplinaEditandoId);
+            if (disc) {
+                disc.nome = nome;
+                disc.cor = cor;
+            }
+        } else {
+            state.disciplinas.push({ id: 'disc_' + Date.now(), nome: nome, cor: cor, progresso: 0, qtdAssuntos: 0, assuntos: [] });
+        }
+
         saveStateAndRefresh();
         renderDisciplinas();
+        // Se a disciplina editada é a que está aberta no momento, atualiza o título na tela de detalhes
+        if (disciplinaEditandoId && state.currentDisciplinaId === disciplinaEditandoId) {
+            document.getElementById('detalhe-disciplina-nome').textContent = nome;
+        }
         closeModal();
     });
 
     renderDisciplinas();
+
+    // Conectado uma única vez aqui (não a cada renderDisciplinas): o grid em
+    // si nunca é recriado, só o innerHTML dele muda, então isso evita
+    // acumular listeners de arraste duplicados a cada renderização.
+    tornarReordenavel(document.getElementById('disciplinas-grid'), '.disciplina-card', (novaOrdemIds) => {
+        state.disciplinas.sort((a, b) => novaOrdemIds.indexOf(a.id) - novaOrdemIds.indexOf(b.id));
+        saveStateAndRefresh();
+    });
+}
+
+function editarDisciplina(id) {
+    const disc = state.disciplinas.find(d => d.id === id);
+    if (!disc) return;
+
+    disciplinaEditandoId = id;
+    document.getElementById('modal-disciplina-titulo').textContent = 'Editar Disciplina';
+    document.getElementById('disciplina-nome').value = disc.nome;
+    document.getElementById('disciplina-cor').value = disc.cor;
+    document.querySelector('#form-disciplina button[type="submit"]').textContent = 'Salvar alterações';
+    document.getElementById('modal-disciplina').classList.add('active');
+    document.getElementById('disciplina-nome').focus();
 }
 
 function initAssuntos() {
@@ -732,10 +766,23 @@ function initAssuntos() {
     const formAssunto = document.getElementById('form-assunto');
     const btnDeleteDisciplinaAtual = document.getElementById('btn-delete-disciplina-atual');
 
-    btnBack.addEventListener('click', showDisciplinasMainList);
+    btnBack.addEventListener('click', () => {
+        showDisciplinasMainList();
+        irParaNivel(1);
+    });
 
     btnDeleteDisciplinaAtual.addEventListener('click', () => {
         if (state.currentDisciplinaId) deleteDisciplina(state.currentDisciplinaId);
+    });
+
+    // Conectado uma única vez aqui (não a cada renderTree): a raiz da árvore
+    // nunca é recriada, só o innerHTML dela muda, então isso evita acumular
+    // listeners de arraste duplicados a cada renderização. Os grupos
+    // aninhados (.tree-children) são recriados a cada render, então esses
+    // são conectados dentro do próprio renderTree.
+    tornarReordenavel(document.getElementById('assuntos-tree'), '.tree-node, .tree-leaf', (novaOrdemIds) => {
+        const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
+        if (disciplina) reordenarNivel(disciplina, null, novaOrdemIds);
     });
 
     formAssunto.addEventListener('submit', (e) => {
@@ -759,13 +806,11 @@ function initAssuntos() {
 }
 
 function initImportador() {
-    const btnImport = document.getElementById('btn-import-edital');
     const modalImport = document.getElementById('modal-importacao');
     const closeImportBtns = document.querySelectorAll('.close-import-btn');
     const formImport = document.getElementById('form-importacao');
     const importText = document.getElementById('import-text');
 
-    btnImport.addEventListener('click', () => { modalImport.classList.add('active'); importText.focus(); });
     const closeImportModal = () => { modalImport.classList.remove('active'); formImport.reset(); };
     closeImportBtns.forEach(btn => btn.addEventListener('click', closeImportModal));
 
@@ -804,6 +849,86 @@ function initImportador() {
     });
 }
 
+/**
+ * MENU "MAIS OPÇÕES" (Importar edital, Exportar/Restaurar backup)
+ */
+function initMaisOpcoes() {
+    const btn = document.getElementById('btn-mais-opcoes');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        abrirMenuAcoes({
+            titulo: 'Mais opções',
+            acoes: [
+                {
+                    label: 'Importar edital',
+                    icone: '📋',
+                    onClick: () => {
+                        document.getElementById('modal-importacao').classList.add('active');
+                        document.getElementById('import-text').focus();
+                    }
+                },
+                { label: 'Exportar backup (.json)', icone: '⬇️', onClick: exportarBackup },
+                { label: 'Restaurar backup', icone: '⬆️', onClick: () => document.getElementById('input-restaurar-backup').click() }
+            ]
+        });
+    });
+}
+
+/**
+ * BACKUP & RESTAURAÇÃO
+ */
+function exportarBackup() {
+    const payload = {
+        app: 'Study Tracker',
+        versao: 1,
+        exportadoEm: new Date().toISOString(),
+        disciplinas: state.disciplinas
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `study-tracker-backup-${getLocalYYYYMMDD()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function initBackupRestore() {
+    const input = document.getElementById('input-restaurar-backup');
+    if (!input) return;
+
+    input.addEventListener('change', (e) => {
+        const arquivo = e.target.files[0];
+        if (!arquivo) return;
+
+        const leitor = new FileReader();
+        leitor.onload = (evt) => {
+            try {
+                const dados = JSON.parse(evt.target.result);
+                const disciplinas = Array.isArray(dados) ? dados : dados.disciplinas;
+                if (!Array.isArray(disciplinas)) throw new Error('Formato inválido');
+
+                const confirmar = confirm(`Restaurar backup com ${disciplinas.length} disciplina(s)? Isso vai SUBSTITUIR todos os dados atuais e não pode ser desfeito.`);
+                if (!confirmar) return;
+
+                state.disciplinas = disciplinas;
+                saveStateAndRefresh();
+                showDisciplinasMainList();
+                alert('Backup restaurado com sucesso!');
+            } catch (err) {
+                alert('Não foi possível ler esse arquivo. Confira se é um backup válido do Study Tracker (.json).');
+            } finally {
+                input.value = '';
+            }
+        };
+        leitor.readAsText(arquivo);
+    });
+}
+
 function initSearchEngine() {
     const searchInput = document.getElementById('global-search');
     const resultsContainer = document.getElementById('search-results');
@@ -831,7 +956,7 @@ function initSearchEngine() {
             const regex = new RegExp(`(${query})`, 'gi');
             const tituloDestacado = escapeHTML(item.titulo).replace(regex, '<mark>$1</mark>');
             return `
-                <div class="search-result-item" onclick="goToSearchTarget('${item.disciplinaId}')">
+                <div class="search-result-item" onclick="goToSearchTarget('${item.disciplinaId}', '${item.id}')">
                     <div class="search-result-text">${tituloDestacado}</div>
                     <span class="search-result-discipline" style="background-color: ${item.disciplinaCor}20; color: ${item.disciplinaCor}; border: 1px solid ${item.disciplinaCor}40">
                         ${escapeHTML(item.disciplinaNome)}
@@ -866,10 +991,10 @@ function openDisciplinaDetalhes(id) {
     document.getElementById('disciplina-detalhes-container').classList.remove('hidden');
     document.getElementById('detalhe-disciplina-nome').textContent = disciplina.nome;
     renderTree();
-    empilharBackBuffer();
+    irParaNivel(2);
 }
-// Exposta em window: é chamada via onclick inline no card, e em módulos ES
-// as funções não viram globais automaticamente.
+// Exposta em window por segurança (chamada de vários lugares no código);
+// não é mais necessária pra onclick inline, mas mantida por conveniência.
 window.openDisciplinaDetalhes = openDisciplinaDetalhes;
 
 function showDisciplinasMainList() {
@@ -894,17 +1019,16 @@ function deleteDisciplina(id) {
     // Se a disciplina excluída era a que estava aberta, volta pra lista principal
     if (state.currentDisciplinaId === id) {
         showDisciplinasMainList();
+        irParaNivel(1);
     } else {
         renderDisciplinas();
     }
 }
-// Exposta em window: chamada via onclick inline no card e no botão de exclusão.
+// Exposta em window por segurança (chamada de vários lugares no código);
+// não é mais necessária pra onclick inline, mas mantida por conveniência.
 window.deleteDisciplina = deleteDisciplina;
 
-window.promptAddSubItem = function(event, paiId) {
-    event.stopPropagation();
-    event.preventDefault();
-
+function promptAddSubItem(paiId) {
     const subTitulo = prompt("Digite o nome do sub-assunto ou grupo:");
     if (!subTitulo || !subTitulo.trim()) return;
 
@@ -926,7 +1050,32 @@ window.promptAddSubItem = function(event, paiId) {
     recalcularDisciplina(disciplina);
     saveStateAndRefresh();
     renderTree();
-};
+}
+
+function editarAssunto(id) {
+    const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
+    if (!disciplina) return;
+
+    let item = null;
+    const buscar = (itens) => {
+        for (const i of itens) {
+            if (i.id === id) { item = i; return true; }
+            if (i.filhos && i.filhos.length > 0 && buscar(i.filhos)) return true;
+        }
+        return false;
+    };
+    buscar(disciplina.assuntos);
+    if (!item) return;
+
+    const novoTitulo = prompt('Editar assunto:', item.titulo);
+    if (novoTitulo === null) return;
+    const limpo = novoTitulo.trim();
+    if (!limpo) return;
+
+    item.titulo = limpo;
+    saveStateAndRefresh();
+    renderTree();
+}
 
 window.toggleTreeItem = function(id) {
     const d = state.disciplinas.find(disc => disc.id === state.currentDisciplinaId);
@@ -964,10 +1113,7 @@ window.toggleTreeItem = function(id) {
     renderTree();
 };
 
-window.deleteTreeItem = function(event, id) {
-    event.stopPropagation();
-    event.preventDefault();
-
+function deleteTreeItem(id) {
     const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
     if (!disciplina) return;
 
@@ -1003,7 +1149,7 @@ window.deleteTreeItem = function(event, id) {
     recalcularDisciplina(disciplina);
     saveStateAndRefresh();
     renderTree();
-};
+}
 
 function recalcularDisciplina(disciplina) {
     let totaisGerais = 0;
@@ -1038,6 +1184,237 @@ function saveStateAndRefresh() {
     updateDashboard();
 }
 
+/**
+ * INTERAÇÕES: TOQUE LONGO, ARRASTAR PRA REORDENAR E MENU DE AÇÕES
+ *
+ * Os antigos botões de "+" e "excluir" dependiam de :hover, que não existe
+ * em telas de toque — ficavam invisíveis mas ainda ocupavam espaço e podiam
+ * ser acionados sem querer. Substituímos por dois gestos:
+ *   - Toque longo (segurar ~500ms parado) no card/item -> abre um menu de
+ *     ações (editar, adicionar sub-assunto, excluir).
+ *   - Arrastar pela alcinha "⠿" (sempre visível) -> reordena os irmãos.
+ */
+
+// Detecta um toque longo num elemento, sem interferir com toques rápidos
+// (tap normal) nem com o gesto de rolar a página.
+function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = {}) {
+    let timer = null;
+    let startX = 0, startY = 0;
+    let disparado = false;
+    let pointerId = null;
+
+    const cancelar = () => {
+        clearTimeout(timer);
+        timer = null;
+        pointerId = null;
+    };
+
+    el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.target.closest('.drag-handle, .assunto-checkbox')) return;
+        // Ignora um segundo dedo enquanto já estamos contando
+        if (timer) return;
+
+        disparado = false;
+        pointerId = e.pointerId;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        timer = setTimeout(() => {
+            disparado = true;
+            timer = null;
+            if (navigator.vibrate) navigator.vibrate(15);
+            callback(e);
+        }, duration);
+    });
+
+    el.addEventListener('pointermove', (e) => {
+        if (!timer || e.pointerId !== pointerId) return;
+        const dx = Math.abs(e.clientX - startX);
+        const dy = Math.abs(e.clientY - startY);
+        if (dx > moveThreshold || dy > moveThreshold) cancelar();
+    });
+
+    el.addEventListener('pointerup', (e) => {
+        if (e.pointerId !== pointerId) return;
+        cancelar();
+    });
+
+    el.addEventListener('pointercancel', (e) => {
+        if (e.pointerId !== pointerId) return;
+        cancelar();
+    });
+
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Bloqueia o clique que o sistema gera logo após um toque longo
+    el.addEventListener('click', (e) => {
+        if (disparado) {
+            e.preventDefault();
+            e.stopPropagation();
+            disparado = false;
+        }
+    }, true);
+}
+// Torna os filhos diretos de um container reordenáveis via arraste pela
+// alça ".drag-handle". Ao soltar, chama onReorder() pra persistir a nova
+// ordem (a própria função já reordenou o DOM visualmente durante o arraste).
+// `itemSelector` deve ser um seletor simples (ex: '.tree-node, .tree-leaf'),
+// SEM ":scope >" — ":scope" dentro de .closest() se refere ao próprio
+// elemento em que .closest() foi chamado, não ao container, então usar
+// ":scope >" ali simplesmente nunca casava com nada.
+function tornarReordenavel(containerEl, itemSelector, onReorder, signal) {
+    let itemArrastado = null;
+    let placeholder = null;
+    let pointerIdAtivo = null;
+    let offsetY = 0;
+
+    const getIrmaos = () => Array.from(containerEl.children).filter(el => el.matches(itemSelector) && el !== placeholder);
+    const opts = signal ? { signal } : {};
+
+    containerEl.addEventListener('pointerdown', (e) => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle || !containerEl.contains(handle)) return;
+        const item = handle.closest(itemSelector);
+        if (!item || item.parentElement !== containerEl) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rect = item.getBoundingClientRect();
+        offsetY = e.clientY - rect.top;
+
+        // Placeholder: ocupa o espaço do item no DOM enquanto ele flutua
+        placeholder = document.createElement('div');
+        placeholder.style.cssText = `height:${rect.height}px;border:2px dashed var(--accent);border-radius:6px;background:rgba(47,129,247,0.07);box-sizing:border-box;`;
+        item.parentNode.insertBefore(placeholder, item.nextSibling);
+
+        // Sai do fluxo e flutua sobre os irmãos
+        item.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:999;pointer-events:none;`;
+
+        itemArrastado = item;
+        pointerIdAtivo = e.pointerId;
+        item.classList.add('sendo-arrastado');
+        document.body.classList.add('arrastando-item');
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    }, opts);
+
+    containerEl.addEventListener('click', (e) => {
+        if (e.target.closest('.drag-handle')) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
+    let prevY = 0;
+
+    function onMove(e) {
+        if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
+
+        // Move o item flutuante junto com o dedo/mouse
+        itemArrastado.style.top = (e.clientY - offsetY) + 'px';
+
+        const direcao = e.clientY > prevY ? 1 : -1; // 1 = descendo, -1 = subindo
+        prevY = e.clientY;
+
+        // Irmãos reais: exclui o placeholder e o item arrastado (que está fixed)
+        const irmaos = Array.from(containerEl.children).filter(
+            el => el !== placeholder && el !== itemArrastado && el.matches(itemSelector)
+        );
+
+        // Algoritmo do SortableJS: compara o ponteiro com o terço superior/inferior
+        // de cada irmão levando em conta a direção do movimento.
+        // - Descendo: só ultrapassa o irmão quando o ponteiro passa dos 2/3 dele
+        // - Subindo:  só volta quando o ponteiro sobe acima de 1/3 dele
+        // Isso cria uma zona morta de 33% no meio que absorve micro-oscilações
+        // e evita o placeholder ficar "preso" quando muda de lado.
+        let novoAntes = null; // null = vai pro final do container
+
+        for (const irmao of irmaos) {
+            const rect = irmao.getBoundingClientRect();
+            const limiar = direcao === 1
+                ? rect.top + rect.height * 0.66  // descendo: ultrapassa depois de 66%
+                : rect.top + rect.height * 0.33; // subindo:  volta antes de 33%
+
+            if (e.clientY < limiar) {
+                novoAntes = irmao;
+                break;
+            }
+        }
+
+        // Só reordena o DOM se o slot alvo mudou — evita reflow desnecessário
+        const slotAtual = placeholder.nextElementSibling;
+        if (novoAntes !== slotAtual) {
+            if (novoAntes === null) {
+                containerEl.appendChild(placeholder);
+            } else {
+                containerEl.insertBefore(placeholder, novoAntes);
+            }
+        }
+    }
+
+    function onUp(e) {
+        if (!itemArrastado || e.pointerId !== pointerIdAtivo) return;
+
+        // Devolve o item ao fluxo normal, no lugar do placeholder
+        itemArrastado.style.cssText = '';
+        itemArrastado.classList.remove('sendo-arrastado');
+        placeholder.parentNode.insertBefore(itemArrastado, placeholder);
+        placeholder.remove();
+        placeholder = null;
+
+        document.body.classList.remove('arrastando-item');
+        try { itemArrastado.releasePointerCapture(pointerIdAtivo); } catch (_) {}
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+
+        const novaOrdemIds = getIrmaos().map(el => el.dataset.id);
+        itemArrastado = null;
+        pointerIdAtivo = null;
+        onReorder(novaOrdemIds);
+    }
+}
+
+// Abre o bottom sheet de ações com os botões passados em `acoes`.
+function abrirMenuAcoes({ titulo, acoes }) {
+    const modal = document.getElementById('modal-acoes');
+    const tituloEl = document.getElementById('acoes-sheet-titulo');
+    const lista = document.getElementById('acoes-sheet-lista');
+
+    tituloEl.textContent = titulo;
+    lista.innerHTML = '';
+
+    acoes.forEach(acao => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'acao-item' + (acao.perigo ? ' perigo' : '');
+        btn.innerHTML = `<span class="acao-icone">${acao.icone}</span><span>${escapeHTML(acao.label)}</span>`;
+        btn.addEventListener('click', () => {
+            fecharMenuAcoes();
+            acao.onClick();
+        });
+        lista.appendChild(btn);
+    });
+
+    modal.classList.add('active');
+}
+
+function fecharMenuAcoes() {
+    document.getElementById('modal-acoes').classList.remove('active');
+}
+
+function initMenuAcoes() {
+    const modal = document.getElementById('modal-acoes');
+    modal.querySelector('.acoes-sheet-cancelar').addEventListener('click', fecharMenuAcoes);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) fecharMenuAcoes();
+    });
+}
+
 function renderDisciplinas() {
     const grid = document.getElementById('disciplinas-grid');
     if (!grid) return;
@@ -1048,9 +1425,11 @@ function renderDisciplinas() {
     }
 
     grid.innerHTML = state.disciplinas.map(disc => `
-        <div class="card disciplina-card" style="border-left-color: ${disc.cor}" onclick="openDisciplinaDetalhes('${disc.id}')">
-            <button class="btn-delete-icon disciplina-delete-btn" onclick="event.stopPropagation(); deleteDisciplina('${disc.id}')" aria-label="Excluir disciplina" title="Excluir disciplina">🗑</button>
-            <h3>${escapeHTML(disc.nome)}</h3>
+        <div class="card disciplina-card" data-id="${disc.id}" style="border-left-color: ${disc.cor}">
+            <div class="disciplina-card-header">
+                <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
+                <h3 class="disciplina-card-titulo">${escapeHTML(disc.nome)}</h3>
+            </div>
             <div class="disciplina-meta">
                 <span>Assuntos: <strong>${disc.qtdAssuntos}</strong></span>
                 <span>Progresso: <strong>${disc.progresso}%</strong></span>
@@ -1058,6 +1437,32 @@ function renderDisciplinas() {
             <div class="progress-container"><div class="progress-bar" style="width: ${disc.progresso}%; background-color: ${disc.cor}"></div></div>
         </div>
     `).join('');
+
+    grid.querySelectorAll('.disciplina-card').forEach(card => {
+        const id = card.dataset.id;
+
+        // A ordem importa: dois listeners de "click" no MESMO elemento disparam
+        // na ordem em que foram registrados, então o bloqueio de clique do
+        // toque longo precisa ser registrado ANTES do clique que abre a
+        // disciplina — senão o toque longo abriria a disciplina e mostraria
+        // o menu ao mesmo tempo.
+        attachLongPress(card, () => {
+            const disc = state.disciplinas.find(d => d.id === id);
+            if (!disc) return;
+            abrirMenuAcoes({
+                titulo: disc.nome,
+                acoes: [
+                    { label: 'Editar disciplina', icone: '✏️', onClick: () => editarDisciplina(id) },
+                    { label: 'Excluir disciplina', icone: '🗑', perigo: true, onClick: () => deleteDisciplina(id) }
+                ]
+            });
+        });
+
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.drag-handle')) return;
+            openDisciplinaDetalhes(id);
+        });
+    });
 }
 
 function renderTree() {
@@ -1085,45 +1490,134 @@ function renderTree() {
             const pctLocal = totalFilhosFinais > 0 ? Math.round((concluidosFilhosFinais / totalFilhosFinais) * 100) : 0;
 
             return `
-                <div class="tree-node">
+                <div class="tree-node" data-id="${item.id}">
                     <details class="tree-details" open>
                         <summary class="tree-summary">
+                            <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
                             <div class="summary-content">
                                 <span class="summary-toggle-icon">▶</span>
                                 <input type="checkbox" class="assunto-checkbox" ${item.concluido ? 'checked' : ''} onclick="event.stopPropagation(); toggleTreeItem('${item.id}')">
                                 <span style="text-decoration: ${item.concluido ? 'line-through' : 'none'}; opacity: ${item.concluido ? 0.6 : 1}">${escapeHTML(item.titulo)}</span>
                             </div>
-                            <div style="display:flex; align-items:center; gap:0.5rem;">
-                                <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
-                                <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')" title="Adicionar sub-assunto">+</button>
-                                <button class="btn-delete-item" onclick="deleteTreeItem(event, '${item.id}')" title="Excluir">🗑</button>
-                            </div>
+                            <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
                         </summary>
-                        <div class="tree-children">${item.filhos.map(gerarHTMLNo).join('')}</div>
+                        <div class="tree-children" data-parent-id="${item.id}">${item.filhos.map(gerarHTMLNo).join('')}</div>
                     </details>
                 </div>
             `;
         } else {
             return `
-                <div class="tree-leaf ${item.concluido ? 'concluido' : ''}">
+                <div class="tree-leaf ${item.concluido ? 'concluido' : ''}" data-id="${item.id}">
+                    <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
                     <input type="checkbox" class="assunto-checkbox" id="${item.id}" ${item.concluido ? 'checked' : ''} onclick="toggleTreeItem('${item.id}')">
                     <label for="${item.id}">${escapeHTML(item.titulo)}</label>
-                    <button class="btn-add-sub" onclick="promptAddSubItem(event, '${item.id}')" title="Adicionar sub-assunto">+</button>
-                    <button class="btn-delete-item" onclick="deleteTreeItem(event, '${item.id}')" title="Excluir">🗑</button>
                 </div>
             `;
         }
     };
 
     container.innerHTML = disciplina.assuntos.map(gerarHTMLNo).join('');
+
+    // Toque longo em qualquer item (nó ou folha) -> menu de ações
+    container.querySelectorAll('.tree-node, .tree-leaf').forEach(itemEl => {
+        const id = itemEl.dataset.id;
+        const alvo = itemEl.classList.contains('tree-node')
+            ? itemEl.querySelector(':scope > .tree-details > .tree-summary')
+            : itemEl;
+
+        attachLongPress(alvo, () => {
+            let item = null;
+            const buscar = (itens) => {
+                for (const i of itens) {
+                    if (i.id === id) { item = i; return true; }
+                    if (i.filhos && i.filhos.length > 0 && buscar(i.filhos)) return true;
+                }
+                return false;
+            };
+            buscar(disciplina.assuntos);
+            if (!item) return;
+
+            abrirMenuAcoes({
+                titulo: item.titulo,
+                acoes: [
+                    { label: 'Adicionar sub-assunto', icone: '➕', onClick: () => promptAddSubItem(id) },
+                    { label: 'Editar', icone: '✏️', onClick: () => editarAssunto(id) },
+                    { label: 'Excluir', icone: '🗑', perigo: true, onClick: () => deleteTreeItem(id) }
+                ]
+            });
+        });
+    });
+
+    // Arrastar pra reordenar nos níveis aninhados (.tree-children é recriado
+    // a cada renderTree, então precisamos cancelar os listeners do render
+    // anterior antes de criar novos, para não acumular e causar flickering).
+    treeDragControllers.forEach(ac => ac.abort());
+    treeDragControllers = [];
+
+    container.querySelectorAll('.tree-children').forEach(nivel => {
+        const ac = new AbortController();
+        treeDragControllers.push(ac);
+        tornarReordenavel(nivel, '.tree-node, .tree-leaf', (novaOrdemIds) => {
+            reordenarNivel(disciplina, nivel.dataset.parentId, novaOrdemIds);
+        }, ac.signal);
+    });
 }
 
-window.goToSearchTarget = function(disciplinaId) {
+// Reordena o array de assuntos (raiz, quando parentId é null/undefined) ou
+// os filhos de um item específico, de acordo com a nova ordem de ids.
+function reordenarNivel(disciplina, parentId, novaOrdemIds) {
+    const arrayAlvo = parentId ? encontrarFilhosPorId(disciplina.assuntos, parentId) : disciplina.assuntos;
+    if (!arrayAlvo) return;
+    arrayAlvo.sort((a, b) => novaOrdemIds.indexOf(a.id) - novaOrdemIds.indexOf(b.id));
+    saveStateAndRefresh();
+}
+
+function encontrarFilhosPorId(itens, id) {
+    for (const item of itens) {
+        if (item.id === id) return item.filhos;
+        if (item.filhos && item.filhos.length > 0) {
+            const achado = encontrarFilhosPorId(item.filhos, id);
+            if (achado) return achado;
+        }
+    }
+    return null;
+}
+
+window.goToSearchTarget = function(disciplinaId, itemId) {
     document.getElementById('global-search').value = '';
     document.getElementById('search-results').classList.add('hidden');
+
     const btnNav = document.querySelector('.nav-link[data-target="disciplinas"]');
     if (btnNav) btnNav.click();
     openDisciplinaDetalhes(disciplinaId);
+
+    // Após abrir a disciplina, rola até o item e o destaca.
+    // Usa requestAnimationFrame duplo para garantir que o renderTree() terminou
+    // e o DOM da árvore já está no documento antes de tentar localizar o elemento.
+    if (!itemId) return;
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            // O item pode ser uma .tree-leaf ou um .tree-node — o data-id está
+            // no elemento raiz de ambos.
+            const el = document.querySelector(`[data-id="${itemId}"]`);
+            if (!el) return;
+
+            // Garante que todos os <details> ancestrais estejam abertos
+            let pai = el.parentElement;
+            while (pai) {
+                if (pai.tagName === 'DETAILS') pai.open = true;
+                pai = pai.parentElement;
+            }
+
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Destaque visual por 2 segundos (animation definida no CSS)
+            el.classList.remove('item-destacado');
+            void el.offsetWidth; // força reflow para reiniciar a animação se chamado duas vezes
+            el.classList.add('item-destacado');
+            setTimeout(() => el.classList.remove('item-destacado'), 2200);
+        });
+    });
 };
 
 function escapeHTML(str) {
