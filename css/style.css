@@ -85,7 +85,15 @@ html[data-theme="light"] .theme-icon::before { content: "☀️"; }
 .app-main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
 .view-section { display: none; }
 .view-section.active { display: block; }
-.search-card { position: relative; z-index: 110; padding: 0.3rem 0.875rem; margin-bottom: 0.75rem; }
+.search-card { 
+    position: relative; 
+    z-index: 110; 
+    padding: 0.5rem 0.875rem; /* Padding sutil e uniforme */
+    margin-bottom: 0.75rem; 
+    min-height: 38px;         /* Mantém uma altura consistente e compacta */
+    display: flex;
+    align-items: center;
+}
 .view-header { margin-bottom: 0.5rem; }
 .view-header h2 { font-size: 1.5rem; font-weight: 600; margin: 0; }
 .view-subtitle { color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.2rem; margin-bottom: 0; }
