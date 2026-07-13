@@ -105,9 +105,6 @@ function abrirModalTexto({ titulo, valorInicial = '', placeholder = '', labelBot
         input.value = valorInicial;
         input.placeholder = placeholder;
         btnSubmit.textContent = labelBotao;
-        modal.classList.add('active');
-        input.focus();
-        input.select();
 
         let resolvido = false;
         const finalizar = (valor) => {
@@ -117,6 +114,7 @@ function abrirModalTexto({ titulo, valorInicial = '', placeholder = '', labelBot
             form.removeEventListener('submit', onSubmit);
             btnCancelar.removeEventListener('click', onCancelar);
             btnClose.removeEventListener('click', onCancelar);
+            fecharModalHistorico(); // sem efeito se já fechado via voltar
             resolve(valor);
         };
 
@@ -131,6 +129,13 @@ function abrirModalTexto({ titulo, valorInicial = '', placeholder = '', labelBot
         form.addEventListener('submit', onSubmit);
         btnCancelar.addEventListener('click', onCancelar);
         btnClose.addEventListener('click', onCancelar);
+
+        modal.classList.add('active');
+        input.focus();
+        input.select();
+
+        // Voltar (físico ou gesto) com esse modal aberto conta como cancelar.
+        registrarAberturaModal(() => finalizar(null));
     });
 }
 
@@ -284,6 +289,56 @@ function irParaNivel(alvo) {
     }
 }
 
+/**
+ * MODAIS/POPUPS E O BOTÃO VOLTAR
+ *
+ * Sem isso, apertar voltar (ou o gesto do Android) com um modal, prompt ou
+ * o menu de ações aberto simplesmente não fazia nada visível — o clique
+ * "voltar" ia direto pro histórico da view por baixo, ignorando o popup.
+ *
+ * Cada modal aberto via registrarAberturaModal() empilha 1 entrada de
+ * histórico; fecharModalHistorico() desfaz isso, seja fechado por um botão
+ * (Cancelar/X) ou pelo botão físico de voltar.
+ */
+let modalHistoricoAberto = null; // { fecharVisual }
+let fechamentoModalPendente = null; // timeout id
+
+function registrarAberturaModal(fecharVisual) {
+    if (fechamentoModalPendente) {
+        // Um modal estava sendo fechado neste mesmo instante e outro já
+        // abriu na sequência (ex: menu de ações -> abre "Importar edital").
+        // Cancela o back() ainda não executado e só troca o registro,
+        // reaproveitando a entrada de histórico já empilhada — evita uma
+        // corrida entre history.back() e history.pushState().
+        clearTimeout(fechamentoModalPendente);
+        fechamentoModalPendente = null;
+        modalHistoricoAberto = { fecharVisual };
+        return;
+    }
+    modalHistoricoAberto = { fecharVisual };
+    subirNivel();
+}
+
+// Fecha o modal de histórico atualmente aberto (se houver). `viaPopstate`
+// indica que a chamada já veio de um voltar real, então o navegador já
+// consumiu a entrada do histórico sozinho — só cuidamos da parte visual.
+function fecharModalHistorico(viaPopstate = false) {
+    if (!modalHistoricoAberto) return false;
+    const { fecharVisual } = modalHistoricoAberto;
+    modalHistoricoAberto = null;
+    fecharVisual();
+
+    if (viaPopstate) return true;
+
+    fechamentoModalPendente = setTimeout(() => {
+        fechamentoModalPendente = null;
+        ignorarProximoPopstate = true;
+        nivelHistorico = Math.max(0, nivelHistorico - 1);
+        history.back();
+    }, 0);
+    return true;
+}
+
 function initNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
 
@@ -303,6 +358,10 @@ function initNavigation() {
 
         // Um popstate real do usuário sempre desce exatamente 1 nível
         nivelHistorico = Math.max(0, nivelHistorico - 1);
+
+        // Havia um modal/popup aberto -> fecha ele e para por aqui. A tela
+        // por baixo não deve mudar: o voltar "gastou" nesse fechamento.
+        if (fecharModalHistorico(true)) return;
 
         // Dentro de uma disciplina -> volta pra lista de disciplinas (nível 1)
         if (state.currentDisciplinaId) {
@@ -848,8 +907,7 @@ function initDashboardEmptyState() {
     if (btnImportar) {
         btnImportar.addEventListener('click', () => {
             document.querySelector('.nav-link[data-target="disciplinas"]')?.click();
-            document.getElementById('modal-importacao')?.classList.add('active');
-            document.getElementById('import-text')?.focus();
+            abrirModalImportacao();
         });
     }
 }
@@ -883,6 +941,13 @@ function animateValue(id, end, suffix = '') {
 
 let disciplinaEditandoId = null;
 
+function fecharDisciplinaModalVisual() {
+    document.getElementById('modal-disciplina').classList.remove('active');
+    document.getElementById('form-disciplina').reset();
+    disciplinaEditandoId = null;
+    fecharModalHistorico();
+}
+
 function initDisciplinas() {
     const btnNewDisciplina = document.getElementById('btn-new-disciplina');
     const modal = document.getElementById('modal-disciplina');
@@ -896,9 +961,10 @@ function initDisciplinas() {
         formDisciplina.querySelector('button[type="submit"]').textContent = 'Salvar';
         modal.classList.add('active');
         document.getElementById('disciplina-nome').focus();
+        registrarAberturaModal(fecharDisciplinaModalVisual);
     });
 
-    const closeModal = () => { modal.classList.remove('active'); formDisciplina.reset(); disciplinaEditandoId = null; };
+    const closeModal = () => fecharDisciplinaModalVisual();
     closeModalBtns.forEach(btn => btn.addEventListener('click', closeModal));
 
     formDisciplina.addEventListener('submit', (e) => {
@@ -949,6 +1015,7 @@ function editarDisciplina(id) {
     document.querySelector('#form-disciplina button[type="submit"]').textContent = 'Salvar alterações';
     document.getElementById('modal-disciplina').classList.add('active');
     document.getElementById('disciplina-nome').focus();
+    registrarAberturaModal(fecharDisciplinaModalVisual);
 }
 
 function initAssuntos() {
@@ -995,13 +1062,25 @@ function initAssuntos() {
     });
 }
 
+function fecharImportacaoModalVisual() {
+    document.getElementById('modal-importacao').classList.remove('active');
+    document.getElementById('form-importacao').reset();
+    fecharModalHistorico();
+}
+
+function abrirModalImportacao() {
+    document.getElementById('modal-importacao')?.classList.add('active');
+    document.getElementById('import-text')?.focus();
+    registrarAberturaModal(fecharImportacaoModalVisual);
+}
+
 function initImportador() {
     const modalImport = document.getElementById('modal-importacao');
     const closeImportBtns = document.querySelectorAll('.close-import-btn');
     const formImport = document.getElementById('form-importacao');
     const importText = document.getElementById('import-text');
 
-    const closeImportModal = () => { modalImport.classList.remove('active'); formImport.reset(); };
+    const closeImportModal = () => fecharImportacaoModalVisual();
     closeImportBtns.forEach(btn => btn.addEventListener('click', closeImportModal));
 
     formImport.addEventListener('submit', (e) => {
@@ -1067,10 +1146,7 @@ function initMaisOpcoes() {
                 {
                     label: 'Importar edital',
                     icone: '📋',
-                    onClick: () => {
-                        document.getElementById('modal-importacao').classList.add('active');
-                        document.getElementById('import-text').focus();
-                    }
+                    onClick: () => abrirModalImportacao()
                 },
                 { label: 'Exportar backup (.json)', icone: '⬇️', onClick: exportarBackup },
                 { label: 'Restaurar backup', icone: '⬆️', onClick: () => document.getElementById('input-restaurar-backup').click() }
@@ -1642,10 +1718,12 @@ function abrirMenuAcoes({ titulo, acoes }) {
     });
 
     modal.classList.add('active');
+    registrarAberturaModal(fecharMenuAcoes);
 }
 
 function fecharMenuAcoes() {
     document.getElementById('modal-acoes').classList.remove('active');
+    fecharModalHistorico();
 }
 
 function initMenuAcoes() {
@@ -1674,8 +1752,7 @@ function renderDisciplinas() {
             document.getElementById('btn-new-disciplina')?.click();
         });
         document.getElementById('empty-btn-importar')?.addEventListener('click', () => {
-            document.getElementById('modal-importacao')?.classList.add('active');
-            document.getElementById('import-text')?.focus();
+            abrirModalImportacao();
         });
         return;
     }
