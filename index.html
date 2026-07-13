@@ -198,7 +198,6 @@
                 <div class="card stat-chart-card">
                     <h3>Progresso por Disciplina</h3>
                     <canvas id="chart-disciplinas"></canvas>
-                    <p class="empty-state-inline hidden" id="stat-disciplinas-empty">Nenhuma disciplina cadastrada ainda.</p>
                 </div>
 
                 <div class="card stat-chart-card">
@@ -276,9 +275,9 @@
         </div>
     </div>
 
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <div id="modal-acoes" class="modal-overlay acoes-overlay">
+    <div id="modal-acoes" class="modal-overlay">
         <div class="modal-card acoes-sheet">
             <h3 id="acoes-sheet-titulo" class="acoes-sheet-titulo"></h3>
             <div id="acoes-sheet-lista" class="acoes-sheet-lista"></div>
