@@ -171,6 +171,11 @@ body.arrastando-item * { cursor: grabbing !important; user-select: none !importa
    DASHBOARD
    ========================================================================== */
 .dashboard-summary-card { margin-bottom: 1.5rem; padding: 1.5rem; }
+.dashboard-summary-card, .metric-card {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
 .dashboard-progress-header { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 0.5rem; }
 .dash-progresso-text { font-size: 3rem; font-weight: 700; color: var(--accent); line-height: 1; }
 .dashboard-progress-container { background-color: var(--border-default); border-radius: 12px; height: 6px; overflow: hidden; position: relative; }
