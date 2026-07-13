@@ -330,13 +330,11 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
     -webkit-touch-callout: none;
 }
 
-/* Bottom sheet de ações, acionado por toque longo num card de disciplina
-   ou item da árvore de assuntos. */
-.acoes-overlay { align-items: flex-end; padding: 0; }
-.acoes-sheet { max-width: 500px; margin: 0 auto; border-radius: 16px 16px 0 0; width: 100%; padding-bottom: env(safe-area-inset-bottom, 0); animation: subida-sheet 0.18s ease-out; }
-.acoes-sheet::before { content: ''; display: block; width: 36px; height: 4px; background-color: var(--border-default); border-radius: 2px; margin: 0.75rem auto 0; }
-@keyframes subida-sheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.acoes-sheet-titulo { padding: 1rem 1.25rem 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
+/* Menu de ações, acionado por toque longo num card de disciplina
+   ou item da árvore de assuntos. Usa o mesmo posicionamento (topo) dos
+   outros modais do app — não fica mais ancorado embaixo. */
+.acoes-sheet { max-width: 450px; margin: 0 auto; border-radius: 12px; width: 100%; max-height: calc(100vh - 5.5rem); overflow-y: auto; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }
+.acoes-sheet-titulo { padding: 1.25rem 1.25rem 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
 .acoes-sheet-lista { display: flex; flex-direction: column; padding: 0.25rem 0; }
 .acao-item { display: flex; align-items: center; gap: 0.75rem; width: 100%; background: transparent; border: none; text-align: left; padding: 0.875rem 1.25rem; font-size: 0.9375rem; color: var(--text-primary); cursor: pointer; font-family: inherit; }
 .acao-item:active { background-color: var(--btn-secondary-bg); }
@@ -350,10 +348,6 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: none; align-items: flex-start; justify-content: center; padding: 4.5rem 1rem 1rem; overflow-y: auto; z-index: 200; }
 .modal-overlay.active { display: flex; }
 .modal-card { background-color: var(--bg-overlay); border: 1px solid var(--border-default); border-radius: 12px; width: 100%; max-width: 450px; max-height: calc(100vh - 5.5rem); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); overflow-y: auto; }
-/* Menu de ações (bottom sheet): sempre ancorado embaixo, mesmo mudando o
-   alinhamento padrão acima — usa o id pra garantir precedência sem
-   depender da ordem das regras no arquivo. */
-#modal-acoes.modal-overlay { align-items: flex-end; padding: 0; }
 .modal-card.modal-large { max-width: 600px; }
 .modal-header { padding: 1rem; border-bottom: 1px solid var(--border-default); display: flex; justify-content: space-between; align-items: center; }
 .btn-close { background: transparent; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; }
