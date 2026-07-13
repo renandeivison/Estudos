@@ -31,7 +31,6 @@ function formatBRDate(dateStr) {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initNavigation();
-    initColorPicker();
     initDisciplinas();
     initAssuntos();
     initImportador();
@@ -882,68 +881,6 @@ function animateValue(id, end, suffix = '') {
     window.requestAnimationFrame(step);
 }
 
-// Converte matiz (0-360) para hex com S=100%, L=50% (cores puras e vibrantes)
-function hueParaHex(h) {
-    const s = 1, l = 0.5;
-    const a = s * Math.min(l, 1 - l);
-    const f = n => {
-        const k = (n + h / 30) % 12;
-        return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    };
-    return '#' + [f(0), f(8), f(4)].map(v =>
-        Math.round(v * 255).toString(16).padStart(2, '0')
-    ).join('');
-}
-
-function hexParaHue(hex) {
-    const r = parseInt(hex.slice(1, 3), 16) / 255;
-    const g = parseInt(hex.slice(3, 5), 16) / 255;
-    const b = parseInt(hex.slice(5, 7), 16) / 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
-    if (d === 0) return 0;
-    let h;
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    return Math.round(h * 60 + 360) % 360;
-}
-
-function initColorPicker() {
-    const track = document.getElementById('color-hue-track');
-    const thumb = document.getElementById('color-hue-thumb');
-    const preview = document.getElementById('color-preview');
-    const input = document.getElementById('disciplina-cor');
-    if (!track) return;
-
-    window.setColorPickerHex = (hex) => {
-        const hue = hexParaHue(hex);
-        thumb.style.left = (hue / 360 * 100) + '%';
-        const corViva = hueParaHex(hue);
-        preview.style.backgroundColor = corViva;
-        input.value = corViva;
-    };
-
-    const hueFromPointer = (e) => {
-        const rect = track.getBoundingClientRect();
-        const x = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
-        const hue = Math.round(x * 360);
-        window.setColorPickerHex(hueParaHex(hue));
-    };
-
-    let arrastando = false;
-    track.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        arrastando = true;
-        track.setPointerCapture(e.pointerId);
-        hueFromPointer(e);
-    });
-    track.addEventListener('pointermove', (e) => { if (arrastando) hueFromPointer(e); });
-    track.addEventListener('pointerup', () => { arrastando = false; });
-    track.addEventListener('pointercancel', () => { arrastando = false; });
-
-    window.setColorPickerHex(input.value || '#2f81f7');
-}
-
 let disciplinaEditandoId = null;
 
 function initDisciplinas() {
@@ -957,8 +894,6 @@ function initDisciplinas() {
         disciplinaEditandoId = null;
         modalTitulo.textContent = 'Nova Disciplina';
         formDisciplina.querySelector('button[type="submit"]').textContent = 'Salvar';
-        // Inicia com matiz padrão (azul)
-        setColorPickerHex('#2f81f7');
         modal.classList.add('active');
         document.getElementById('disciplina-nome').focus();
     });
@@ -1010,7 +945,7 @@ function editarDisciplina(id) {
     disciplinaEditandoId = id;
     document.getElementById('modal-disciplina-titulo').textContent = 'Editar Disciplina';
     document.getElementById('disciplina-nome').value = disc.nome;
-    window.setColorPickerHex?.(disc.cor);
+    document.getElementById('disciplina-cor').value = disc.cor;
     document.querySelector('#form-disciplina button[type="submit"]').textContent = 'Salvar alterações';
     document.getElementById('modal-disciplina').classList.add('active');
     document.getElementById('disciplina-nome').focus();
@@ -1271,8 +1206,8 @@ function openDisciplinaDetalhes(id) {
     document.getElementById('detalhe-disciplina-nome').textContent = disciplina.nome;
     renderTree();
     irParaNivel(2);
-    mostrarDicaToqueLongoUmaVez();
     window.scrollTo({ top: 0, behavior: 'instant' });
+    mostrarDicaToqueLongoUmaVez();
 }
 // Exposta em window por segurança (chamada de vários lugares no código);
 // não é mais necessária pra onclick inline, mas mantida por conveniência.
@@ -1517,11 +1452,9 @@ function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = 
 
     el.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if (e.target.closest('.drag-handle, .assunto-checkbox, .checkbox-tap, .tree-leaf-titulo, .tree-node-titulo')) return;
+        if (e.target.closest('.drag-handle, .assunto-checkbox, .checkbox-tap')) return;
+        // Ignora um segundo dedo enquanto já estamos contando
         if (timer) return;
-
-        // Previne seleção de texto que o navegador mobile faz durante toque prolongado
-        window.getSelection()?.removeAllRanges();
 
         disparado = false;
         pointerId = e.pointerId;
@@ -1531,8 +1464,6 @@ function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = 
         timer = setTimeout(() => {
             disparado = true;
             timer = null;
-            // Limpa novamente: alguns navegadores selecionam durante os 500ms de espera
-            window.getSelection()?.removeAllRanges();
             if (navigator.vibrate) navigator.vibrate(15);
             callback(e);
         }, duration);
@@ -1695,9 +1626,6 @@ function abrirMenuAcoes({ titulo, acoes }) {
     const tituloEl = document.getElementById('acoes-sheet-titulo');
     const lista = document.getElementById('acoes-sheet-lista');
 
-    // Limpa qualquer seleção de texto que tenha ocorrido durante o toque longo
-    window.getSelection()?.removeAllRanges();
-
     tituloEl.textContent = titulo;
     lista.innerHTML = '';
 
@@ -1836,8 +1764,8 @@ function renderTree() {
                             <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
                             <div class="summary-content">
                                 <span class="summary-toggle-icon">▶</span>
-                                <label class="checkbox-tap"><input type="checkbox" class="assunto-checkbox" data-item-id="${item.id}" tabindex="-1" ${item.concluido ? 'checked' : ''}></label>
-                                <span class="tree-node-titulo" data-item-id="${item.id}" style="text-decoration: ${item.concluido ? 'line-through' : 'none'}; opacity: ${item.concluido ? 0.6 : 1}">${escapeHTML(item.titulo)}</span>
+                                <label class="checkbox-tap"><input type="checkbox" class="assunto-checkbox" tabindex="-1" ${item.concluido ? 'checked' : ''} onclick="event.stopPropagation(); toggleTreeItem('${item.id}')"></label>
+                                <span style="text-decoration: ${item.concluido ? 'line-through' : 'none'}; opacity: ${item.concluido ? 0.6 : 1}">${escapeHTML(item.titulo)}</span>
                             </div>
                             <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
                         </summary>
@@ -1849,8 +1777,8 @@ function renderTree() {
             return `
                 <div class="tree-leaf ${item.concluido ? 'concluido' : ''}" data-id="${item.id}">
                     <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
-                    <label class="checkbox-tap"><input type="checkbox" class="assunto-checkbox" data-item-id="${item.id}" tabindex="-1" ${item.concluido ? 'checked' : ''}></label>
-                    <label class="tree-leaf-titulo" data-item-id="${item.id}">${escapeHTML(item.titulo)}</label>
+                    <label class="checkbox-tap"><input type="checkbox" class="assunto-checkbox" tabindex="-1" ${item.concluido ? 'checked' : ''} onclick="toggleTreeItem('${item.id}')"></label>
+                    <label class="tree-leaf-titulo" onclick="toggleTreeItem('${item.id}')">${escapeHTML(item.titulo)}</label>
                 </div>
             `;
         }
@@ -1858,33 +1786,11 @@ function renderTree() {
 
     container.innerHTML = disciplina.assuntos.map(gerarHTMLNo).join('');
 
-    // Conecta checkboxes e títulos via addEventListener (não onclick inline)
-    // para evitar o double-toggle causado por click em <input> dentro de <label onclick>:
-    // o browser aciona o toggle nativo do checkbox E propagaria o onclick do label.
-    container.querySelectorAll('.assunto-checkbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-            e.stopPropagation();
-            toggleTreeItem(cb.dataset.itemId);
-            // Reverte o estado visual — toggleTreeItem atualiza o DOM manualmente
-            // via atualizarNoDOM; deixar o browser mudar o checked causaria inconsistência
-            cb.checked = !cb.checked;
-        });
-    });
-
-    container.querySelectorAll('.tree-leaf-titulo, .tree-node-titulo').forEach(label => {
-        label.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleTreeItem(label.dataset.itemId);
-        });
-    });
-
     // Toque longo em qualquer item (nó ou folha) -> menu de ações
     container.querySelectorAll('.tree-node, .tree-leaf').forEach(itemEl => {
         const id = itemEl.dataset.id;
-        // Usa querySelector simples (sem :scope >) para encontrar o summary
-        // mesmo em sub-assuntos aninhados dentro de .tree-children
         const alvo = itemEl.classList.contains('tree-node')
-            ? itemEl.querySelector('.tree-details > .tree-summary')
+            ? itemEl.querySelector(':scope > .tree-details > .tree-summary')
             : itemEl;
 
         attachLongPress(alvo, () => {
