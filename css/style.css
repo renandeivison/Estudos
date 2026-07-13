@@ -171,11 +171,6 @@ body.arrastando-item * { cursor: grabbing !important; user-select: none !importa
    DASHBOARD
    ========================================================================== */
 .dashboard-summary-card { margin-bottom: 1.5rem; padding: 1.5rem; }
-.dashboard-summary-card, .metric-card {
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
-}
 .dashboard-progress-header { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 0.5rem; }
 .dash-progresso-text { font-size: 3rem; font-weight: 700; color: var(--accent); line-height: 1; }
 .dashboard-progress-container { background-color: var(--border-default); border-radius: 12px; height: 6px; overflow: hidden; position: relative; }
@@ -354,7 +349,7 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
 #import-text { width: 100%; height: 250px; background-color: var(--input-bg); border: 1px solid var(--border-default); border-radius: 6px; padding: 0.75rem; color: var(--text-primary); font-family: monospace; font-size: 0.875rem; resize: vertical; outline: none; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
 
-.app-navigation { position: fixed; bottom: 0; left: 0; right: 0; background-color: var(--bg-overlay); border-top: 1px solid var(--border-default); z-index: 100; }
+.app-navigation { position: fixed; bottom: 0; left: 0; right: 0; background-color: var(--bg-overlay); border-top: 1px solid var(--border-default); z-index: 100; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .nav-list { display: flex; list-style: none; justify-content: space-around; align-items: center; height: 60px; }
 .nav-item { flex: 1; height: 100%; }
 .nav-link { width: 100%; height: 100%; background: transparent; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: inherit; font-size: 0.65rem; color: var(--text-secondary); gap: 0.25rem; cursor: pointer; }
