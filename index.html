@@ -45,32 +45,43 @@
                 <p class="view-subtitle">Bem-vindo de volta! Aqui está o resumo geral dos seus estudos.</p>
             </div>
             
-            <div class="card dashboard-summary-card">
-                <h3>Progresso Geral</h3>
-                <div class="dashboard-progress-header">
-                    <span id="dash-progresso-text" class="dash-progresso-text">0%</span>
-                </div>
-                <div class="dashboard-progress-container">
-                    <div id="dash-progresso-bar" class="dashboard-progress-bar"></div>
+            <div id="dashboard-empty-state" class="card empty-state hidden">
+                <h3>Comece seus estudos</h3>
+                <p>Você ainda não tem disciplinas cadastradas. Crie a primeira ou importe um edital inteiro de uma vez.</p>
+                <div class="empty-state-actions">
+                    <button type="button" class="btn btn-primary" id="dashboard-btn-nova-disciplina">Nova disciplina</button>
+                    <button type="button" class="btn btn-secondary" id="dashboard-btn-importar">Importar edital</button>
                 </div>
             </div>
 
-            <div class="dashboard-metrics-grid">
-                <div class="card metric-card">
-                    <h4>Disciplinas</h4>
-                    <span id="dash-disciplinas" class="metric-value">0</span>
+            <div id="dashboard-content">
+                <div class="card dashboard-summary-card">
+                    <h3>Progresso Geral</h3>
+                    <div class="dashboard-progress-header">
+                        <span id="dash-progresso-text" class="dash-progresso-text">0%</span>
+                    </div>
+                    <div class="dashboard-progress-container">
+                        <div id="dash-progresso-bar" class="dashboard-progress-bar"></div>
+                    </div>
                 </div>
-                <div class="card metric-card">
-                    <h4>Assuntos Totais</h4>
-                    <span id="dash-assuntos" class="metric-value">0</span>
-                </div>
-                <div class="card metric-card">
-                    <h4>Concluídos</h4>
-                    <span id="dash-concluidos" class="metric-value metric-success">0</span>
-                </div>
-                <div class="card metric-card">
-                    <h4>Restantes</h4>
-                    <span id="dash-restantes" class="metric-value metric-warning">0</span>
+
+                <div class="dashboard-metrics-grid">
+                    <div class="card metric-card">
+                        <h4>Disciplinas</h4>
+                        <span id="dash-disciplinas" class="metric-value">0</span>
+                    </div>
+                    <div class="card metric-card">
+                        <h4>Assuntos Totais</h4>
+                        <span id="dash-assuntos" class="metric-value">0</span>
+                    </div>
+                    <div class="card metric-card">
+                        <h4>Concluídos</h4>
+                        <span id="dash-concluidos" class="metric-value metric-success">0</span>
+                    </div>
+                    <div class="card metric-card">
+                        <h4>Restantes</h4>
+                        <span id="dash-restantes" class="metric-value metric-warning">0</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -134,7 +145,9 @@
 
             <div class="card" style="margin-bottom: 1.5rem;">
                 <div class="heatmap-scroll" id="heatmap-container">
-                    </div>
+                    <div class="heatmap-months" id="heatmap-months"></div>
+                    <div class="heatmap-grid" id="heatmap-grid"></div>
+                </div>
                 <div class="heatmap-legend">
                     <span style="font-size: 0.75rem; color: var(--text-secondary);">Menos</span>
                     <div class="heatmap-cell" data-level="0"></div>
@@ -160,36 +173,43 @@
                 <p class="view-subtitle">Análise detalhada do seu tempo de estudo.</p>
             </div>
 
-            <div class="stats-grid-top">
-                <div class="card stat-highlight-card">
-                    <h4>Percentual Geral</h4>
-                    <div class="stat-donut-wrapper">
-                        <canvas id="chart-percentual-geral"></canvas>
-                        <span id="stat-percentual-valor" class="stat-donut-value">0%</span>
+            <div id="estatisticas-empty-state" class="card empty-state empty-state-stats hidden">
+                <h3>Ainda sem estatísticas</h3>
+                <p>Comece a marcar assuntos como concluídos para ver seu progresso, sequência de estudos e gráficos aqui.</p>
+            </div>
+
+            <div id="estatisticas-content">
+                <div class="stats-grid-top">
+                    <div class="card stat-highlight-card">
+                        <h4>Percentual Geral</h4>
+                        <div class="stat-donut-wrapper">
+                            <canvas id="chart-percentual-geral"></canvas>
+                            <span id="stat-percentual-valor" class="stat-donut-value">0%</span>
+                        </div>
+                    </div>
+                    <div class="card stat-highlight-card">
+                        <h4>Sequência de Estudos</h4>
+                        <div class="stat-streak-icon">🔥</div>
+                        <span id="stat-streak-valor" class="stat-highlight-value">0 dias</span>
+                        <p class="view-subtitle" id="stat-streak-recorde">Recorde: 0 dias</p>
                     </div>
                 </div>
-                <div class="card stat-highlight-card">
-                    <h4>Sequência de Estudos</h4>
-                    <div class="stat-streak-icon">🔥</div>
-                    <span id="stat-streak-valor" class="stat-highlight-value">0 dias</span>
-                    <p class="view-subtitle" id="stat-streak-recorde">Recorde: 0 dias</p>
+
+                <div class="card stat-chart-card">
+                    <h3>Progresso por Disciplina</h3>
+                    <canvas id="chart-disciplinas"></canvas>
+                    <p class="empty-state-inline hidden" id="stat-disciplinas-empty">Nenhuma disciplina cadastrada ainda.</p>
                 </div>
-            </div>
 
-            <div class="card stat-chart-card">
-                <h3>Progresso por Disciplina</h3>
-                <canvas id="chart-disciplinas"></canvas>
-                <p class="empty-state-inline hidden" id="stat-disciplinas-empty">Nenhuma disciplina cadastrada ainda.</p>
-            </div>
+                <div class="card stat-chart-card">
+                    <h3>Assuntos Concluídos por Mês</h3>
+                    <canvas id="chart-mensal"></canvas>
+                </div>
 
-            <div class="card stat-chart-card">
-                <h3>Assuntos Concluídos por Mês</h3>
-                <canvas id="chart-mensal"></canvas>
-            </div>
-
-            <div class="card stat-chart-card">
-                <h3>Assuntos Concluídos por Semana</h3>
-                <canvas id="chart-semanal"></canvas>
+                <div class="card stat-chart-card">
+                    <h3>Assuntos Concluídos por Semana</h3>
+                    <canvas id="chart-semanal"></canvas>
+                </div>
             </div>
         </section>
 
@@ -237,6 +257,26 @@
             </form>
         </div>
     </div>
+
+    <div id="modal-texto" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-texto-titulo">Editar</h3>
+                <button type="button" class="btn-close modal-texto-close">&times;</button>
+            </div>
+            <form id="form-texto">
+                <div class="form-group">
+                    <input type="text" id="modal-texto-input" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary modal-texto-cancelar">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
 
     <div id="modal-acoes" class="modal-overlay acoes-overlay">
         <div class="modal-card acoes-sheet">

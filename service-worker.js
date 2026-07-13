@@ -11,7 +11,7 @@
  *  - Demais requisições same-origin: network-first com fallback em cache.
  */
 
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';
 const APP_SHELL_CACHE = `study-tracker-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `study-tracker-runtime-${CACHE_VERSION}`;
 const FONTS_CACHE = `study-tracker-fonts-${CACHE_VERSION}`;
