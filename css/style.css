@@ -59,6 +59,17 @@ html[data-theme="light"] {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg-default); color: var(--text-primary); line-height: 1.5; padding-bottom: 70px; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
 .nav-link, .nav-link svg, .card, .app-header, .app-navigation, .modal-card { transition: background-color 0.3s, color 0.3s, border-color 0.3s, fill 0.3s; }
+
+/* Seleção de texto: por padrão, nada na interface é selecionável. Isso
+   resolve de vez o toque longo "vazando" pra seleção nativa do navegador
+   em QUALQUER elemento (rótulo, badge, texto de toast, botão, etc.) — sem
+   essa regra de base, cada novo elemento que aparecesse embaixo do dedo
+   durante um toque longo ia precisar de mais uma exceção manual, e a
+   lista nunca converge. A única exceção de verdade são os campos de
+   texto reais (input/textarea), onde selecionar é parte de editar. */
+body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
+
 .hidden { display: none !important; }
 
 .btn { font-family: inherit; font-size: 0.875rem; font-weight: 500; padding: 0.375rem 1rem; border-radius: 6px; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; justify-content: center; }
