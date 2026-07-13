@@ -345,10 +345,16 @@ html[data-theme="dark"] .tree-children { background-color: rgba(255, 255, 255, 0
 /* ==========================================================================
    MODAIS & NAVEGAÇÃO
    ========================================================================== */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: none; align-items: flex-start; justify-content: center; padding: 4.5rem 1rem 1rem; overflow-y: auto; z-index: 200; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: none; align-items: center; justify-content: center; padding: 1rem; overflow-y: auto; z-index: 200; }
 .modal-overlay.active { display: flex; }
-.modal-card { background-color: var(--bg-overlay); border: 1px solid var(--border-default); border-radius: 12px; width: 100%; max-width: 450px; max-height: calc(100vh - 5.5rem); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); overflow-y: auto; }
+.modal-card { background-color: var(--bg-overlay); border: 1px solid var(--border-default); border-radius: 12px; width: 100%; max-width: 450px; max-height: calc(100vh - 2rem); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); overflow-y: auto; }
 .modal-card.modal-large { max-width: 600px; }
+/* Só o modal de editar/adicionar item de texto fica ancorado no topo — é o
+   único com campo de digitação, então precisa ficar visível acima do
+   teclado do celular. Os demais popups (menus, formulários maiores)
+   voltam pro centro da tela. */
+#modal-texto.modal-overlay { align-items: flex-start; padding: 4.5rem 1rem 1rem; }
+#modal-texto .modal-card { max-height: calc(100vh - 5.5rem); }
 .modal-header { padding: 1rem; border-bottom: 1px solid var(--border-default); display: flex; justify-content: space-between; align-items: center; }
 .btn-close { background: transparent; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; }
 #form-disciplina, #form-importacao, #form-texto { padding: 1.25rem; }
