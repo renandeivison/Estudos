@@ -28,6 +28,14 @@ function formatBRDate(dateStr) {
     return `${d}/${m}/${y}`;
 }
 
+// Gera um id único para disciplinas/assuntos. Um contador incremental é
+// anexado ao timestamp para garantir unicidade mesmo quando vários itens
+// são criados no mesmo milissegundo (ex: importação em lote de um edital).
+let proximoIdSufixo = 0;
+function gerarId(prefixo) {
+    return `${prefixo}_${Date.now()}_${proximoIdSufixo++}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initNavigation();
@@ -822,17 +830,8 @@ function renderEstatisticas() {
     document.getElementById('stat-streak-recorde').textContent = `Recorde: ${recorde} dia${recorde !== 1 ? 's' : ''}`;
 
     // Progresso por disciplina
-    const canvasDisciplinas = document.getElementById('chart-disciplinas');
-    const emptyDisciplinas = document.getElementById('stat-disciplinas-empty');
-    if (state.disciplinas.length === 0) {
-        canvasDisciplinas.classList.add('hidden');
-        emptyDisciplinas.classList.remove('hidden');
-    } else {
-        canvasDisciplinas.classList.remove('hidden');
-        emptyDisciplinas.classList.add('hidden');
-        const itensDisciplinas = state.disciplinas.map(d => ({ label: d.nome, value: d.progresso, color: d.cor }));
-        drawHorizontalBarChart('chart-disciplinas', itensDisciplinas);
-    }
+    const itensDisciplinas = state.disciplinas.map(d => ({ label: d.nome, value: d.progresso, color: d.cor }));
+    drawHorizontalBarChart('chart-disciplinas', itensDisciplinas);
 
     // Assuntos concluídos por mês
     const meses = computeMonthlyStats(history);
@@ -981,7 +980,7 @@ function initDisciplinas() {
                 disc.cor = cor;
             }
         } else {
-            state.disciplinas.push({ id: 'disc_' + Date.now(), nome: nome, cor: cor, progresso: 0, qtdAssuntos: 0, assuntos: [] });
+            state.disciplinas.push({ id: gerarId('disc'), nome: nome, cor: cor, progresso: 0, qtdAssuntos: 0, assuntos: [] });
         }
 
         saveStateAndRefresh();
@@ -1053,7 +1052,7 @@ function initAssuntos() {
 
         const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
         if (disciplina) {
-            disciplina.assuntos.push({ id: 'item_' + Date.now(), titulo: titulo, concluido: false, filhos: [] });
+            disciplina.assuntos.push({ id: gerarId('item'), titulo: titulo, concluido: false, filhos: [] });
             tituloInput.value = '';
             recalcularDisciplina(disciplina);
             saveStateAndRefresh();
@@ -1089,7 +1088,6 @@ function initImportador() {
         if (!rawText.trim()) return;
 
         const blocos = rawText.split(/\n\s*\n/);
-        let timestampOffset = 0;
         let disciplinasCriadas = 0, disciplinasAtualizadas = 0, assuntosCriados = 0;
 
         blocos.forEach(bloco => {
@@ -1102,7 +1100,7 @@ function initImportador() {
             
             if (!disciplina) {
                 const corAleatoria = PALETA_CORES[Math.floor(Math.random() * PALETA_CORES.length)];
-                disciplina = { id: 'disc_' + (Date.now() + timestampOffset++), nome: nomeDisciplina, cor: corAleatoria, progresso: 0, qtdAssuntos: 0, assuntos: [] };
+                disciplina = { id: gerarId('disc'), nome: nomeDisciplina, cor: corAleatoria, progresso: 0, qtdAssuntos: 0, assuntos: [] };
                 state.disciplinas.push(disciplina);
                 disciplinasCriadas++;
             } else {
@@ -1110,7 +1108,7 @@ function initImportador() {
             }
 
             assuntosDaMateria.forEach(tituloAssunto => {
-                disciplina.assuntos.push({ id: 'item_' + (Date.now() + timestampOffset++), titulo: tituloAssunto, concluido: false, filhos: [] });
+                disciplina.assuntos.push({ id: gerarId('item'), titulo: tituloAssunto, concluido: false, filhos: [] });
                 assuntosCriados++;
             });
 
@@ -1343,7 +1341,7 @@ async function promptAddSubItem(paiId) {
     const encontrarENserir = (itens) => {
         for (let item of itens) {
             if (item.id === paiId) {
-                item.filhos.push({ id: 'item_' + Date.now(), titulo: subTitulo, concluido: false, filhos: [] });
+                item.filhos.push({ id: gerarId('item'), titulo: subTitulo, concluido: false, filhos: [] });
                 return true;
             }
             if (item.filhos && item.filhos.length > 0 && encontrarENserir(item.filhos)) return true;
