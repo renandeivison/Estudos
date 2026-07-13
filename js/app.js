@@ -1518,8 +1518,10 @@ function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = 
     el.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.target.closest('.drag-handle, .assunto-checkbox, .checkbox-tap, .tree-leaf-titulo, .tree-node-titulo')) return;
-        // Ignora um segundo dedo enquanto já estamos contando
         if (timer) return;
+
+        // Previne seleção de texto que o navegador mobile faz durante toque prolongado
+        window.getSelection()?.removeAllRanges();
 
         disparado = false;
         pointerId = e.pointerId;
@@ -1529,6 +1531,8 @@ function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = 
         timer = setTimeout(() => {
             disparado = true;
             timer = null;
+            // Limpa novamente: alguns navegadores selecionam durante os 500ms de espera
+            window.getSelection()?.removeAllRanges();
             if (navigator.vibrate) navigator.vibrate(15);
             callback(e);
         }, duration);
@@ -1764,11 +1768,10 @@ function renderDisciplinas() {
             <div class="disciplina-card-header">
                 <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
                 <h3 class="disciplina-card-titulo">${escapeHTML(disc.nome)}</h3>
-                <span class="disciplina-status-badge ${status.classe}">${status.label}</span>
             </div>
             <div class="disciplina-meta">
                 <span>Assuntos: <strong>${disc.qtdAssuntos}</strong></span>
-                <span>Progresso: <strong>${disc.progresso}%</strong></span>
+                <span class="disciplina-status-badge ${status.classe}">${status.label}</span>
             </div>
             <div class="progress-container"><div class="progress-bar" style="width: ${disc.progresso}%; background-color: ${disc.cor}"></div></div>
         </div>
@@ -1878,8 +1881,10 @@ function renderTree() {
     // Toque longo em qualquer item (nó ou folha) -> menu de ações
     container.querySelectorAll('.tree-node, .tree-leaf').forEach(itemEl => {
         const id = itemEl.dataset.id;
+        // Usa querySelector simples (sem :scope >) para encontrar o summary
+        // mesmo em sub-assuntos aninhados dentro de .tree-children
         const alvo = itemEl.classList.contains('tree-node')
-            ? itemEl.querySelector(':scope > .tree-details > .tree-summary')
+            ? itemEl.querySelector('.tree-details > .tree-summary')
             : itemEl;
 
         attachLongPress(alvo, () => {
