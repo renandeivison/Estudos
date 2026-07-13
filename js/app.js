@@ -38,9 +38,115 @@ document.addEventListener('DOMContentLoaded', () => {
     initBackupRestore();
     initSearchEngine();
     initMenuAcoes();
+    initModalTexto();
     initPWA();
+    initDashboardEmptyState();
     updateDashboard();
 });
+
+/**
+ * TOAST — feedback rápido e não bloqueante. Usado no lugar de alert() e
+ * confirm(): ações destrutivas acontecem na hora, mas com um botão
+ * "Desfazer" por alguns segundos, em vez de interromper o usuário com um
+ * diálogo nativo ANTES da ação.
+ */
+function mostrarToast(mensagem, { acaoLabel, onAcao, duracao = 4000, perigo = false } = {}) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (perigo ? ' perigo' : '');
+
+    const msgEl = document.createElement('span');
+    msgEl.className = 'toast-message';
+    msgEl.textContent = mensagem;
+    toast.appendChild(msgEl);
+
+    let fechado = false;
+    const fechar = () => {
+        if (fechado) return;
+        fechado = true;
+        toast.classList.add('saindo');
+        setTimeout(() => toast.remove(), 200);
+    };
+
+    if (acaoLabel && onAcao) {
+        const btnAcao = document.createElement('button');
+        btnAcao.type = 'button';
+        btnAcao.className = 'toast-action';
+        btnAcao.textContent = acaoLabel;
+        btnAcao.addEventListener('click', () => {
+            fechar();
+            onAcao();
+        });
+        toast.appendChild(btnAcao);
+    }
+
+    container.appendChild(toast);
+    setTimeout(fechar, duracao);
+}
+
+/**
+ * MODAL DE TEXTO — substitui window.prompt(). Diferente do prompt nativo,
+ * respeita o tema do app e (crucial no iOS) exibe corretamente o valor
+ * inicial quando editando algo existente.
+ */
+function abrirModalTexto({ titulo, valorInicial = '', placeholder = '', labelBotao = 'Salvar' }) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal-texto');
+        const tituloEl = document.getElementById('modal-texto-titulo');
+        const form = document.getElementById('form-texto');
+        const input = document.getElementById('modal-texto-input');
+        const btnSubmit = form.querySelector('button[type="submit"]');
+        const btnCancelar = modal.querySelector('.modal-texto-cancelar');
+        const btnClose = modal.querySelector('.modal-texto-close');
+
+        tituloEl.textContent = titulo;
+        input.value = valorInicial;
+        input.placeholder = placeholder;
+        btnSubmit.textContent = labelBotao;
+        modal.classList.add('active');
+        input.focus();
+        input.select();
+
+        let resolvido = false;
+        const finalizar = (valor) => {
+            if (resolvido) return;
+            resolvido = true;
+            modal.classList.remove('active');
+            form.removeEventListener('submit', onSubmit);
+            btnCancelar.removeEventListener('click', onCancelar);
+            btnClose.removeEventListener('click', onCancelar);
+            resolve(valor);
+        };
+
+        const onSubmit = (e) => {
+            e.preventDefault();
+            const valor = input.value.trim();
+            if (!valor) return;
+            finalizar(valor);
+        };
+        const onCancelar = () => finalizar(null);
+
+        form.addEventListener('submit', onSubmit);
+        btnCancelar.addEventListener('click', onCancelar);
+        btnClose.addEventListener('click', onCancelar);
+    });
+}
+
+function initModalTexto() {
+    // Nada a inicializar globalmente: os listeners são criados e removidos
+    // a cada chamada de abrirModalTexto() para suportar chamadas concorrentes
+    // com segurança. Mantido como função só para ficar junto dos outros init*.
+}
+
+// Dica única sobre o gesto de toque longo, mostrada na primeira vez que o
+// usuário abre uma disciplina (é onde os itens com toque longo aparecem).
+function mostrarDicaToqueLongoUmaVez() {
+    if (localStorage.getItem('st_dica_toque_longo')) return;
+    localStorage.setItem('st_dica_toque_longo', '1');
+    mostrarToast('Dica: toque e segure em um item para editar, excluir ou adicionar sub-assunto', { duracao: 6000 });
+}
 
 /**
  * PWA - Service Worker, instalação e funcionamento offline
@@ -124,6 +230,16 @@ function ativarAba(targetView) {
     // mesmo com outra aba na tela, e o botão voltar acabava te mandando pro
     // lugar errado.
     state.currentDisciplinaId = null;
+
+    // Ao sair da aba de Disciplinas, limpa a busca — sem isso, um termo
+    // buscado e não usado (ou usado e já visitado) ficava esperando na
+    // caixa quando o usuário voltava, como se ainda estivesse "em uso".
+    if (targetView !== 'disciplinas') {
+        const searchInput = document.getElementById('global-search');
+        const searchResults = document.getElementById('search-results');
+        if (searchInput) searchInput.value = '';
+        if (searchResults) { searchResults.classList.add('hidden'); searchResults.innerHTML = ''; }
+    }
 
     navLinks.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-target') === targetView));
     sections.forEach(section => section.classList.toggle('active', section.id === `${targetView}-view`));
@@ -234,7 +350,8 @@ function getContributions() {
 
 function renderHeatmap() {
     const container = document.getElementById('heatmap-container');
-    if (!container) return;
+    const grid = document.getElementById('heatmap-grid');
+    if (!container || !grid) return;
 
     const history = getContributions();
     const today = new Date();
@@ -244,8 +361,9 @@ function renderHeatmap() {
     startDate.setFullYear(today.getFullYear() - 1);
     startDate.setDate(startDate.getDate() - startDate.getDay());
 
-    let html = '<div class="heatmap-grid">';
+    let html = '';
     let currentDate = new Date(startDate);
+    let totalSemanas = 0;
 
     while (currentDate <= today) {
         const dateStr = getLocalYYYYMMDD(currentDate);
@@ -259,25 +377,55 @@ function renderHeatmap() {
         if (count >= 10) level = 4;
 
         html += `<div class="heatmap-cell" data-level="${level}" data-date="${dateStr}" title="${count} assunto(s) em ${formatBRDate(dateStr)}"></div>`;
+        if (currentDate.getDay() === 0) totalSemanas++;
         currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    html += '</div>';
-    container.innerHTML = html;
+    grid.innerHTML = html;
+    renderHeatmapMeses(startDate, totalSemanas);
 
     // Rola para o final da grid (foco no hoje)
     container.scrollLeft = container.scrollWidth;
 
     // Adiciona interatividade nos quadrados
-    document.querySelectorAll('.heatmap-cell').forEach(cell => {
+    grid.querySelectorAll('.heatmap-cell').forEach(cell => {
         cell.addEventListener('click', (e) => {
-            document.querySelectorAll('.heatmap-cell').forEach(c => c.classList.remove('selected'));
+            grid.querySelectorAll('.heatmap-cell').forEach(c => c.classList.remove('selected'));
             e.target.classList.add('selected');
             
             const dateStr = e.target.getAttribute('data-date');
             showCalendarioDetails(dateStr, history[dateStr] || []);
         });
     });
+}
+
+// Desenha os rótulos de mês acima do heatmap, alinhados coluna a coluna
+// (cada coluna = uma semana), no estilo do calendário de contribuições
+// do GitHub — sem isso, era difícil saber a qual período cada trecho
+// da grade correspondia.
+function renderHeatmapMeses(startDate, totalSemanas) {
+    const container = document.getElementById('heatmap-months');
+    if (!container) return;
+
+    let html = '';
+    let mesAnterior = null;
+
+    for (let semana = 0; semana < totalSemanas; semana++) {
+        const dataSemana = new Date(startDate);
+        dataSemana.setDate(dataSemana.getDate() + semana * 7);
+        const mesAtual = dataSemana.getMonth();
+
+        if (mesAtual !== mesAnterior) {
+            let label = dataSemana.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+            label = label.charAt(0).toUpperCase() + label.slice(1);
+            html += `<div class="heatmap-month-label">${label}</div>`;
+            mesAnterior = mesAtual;
+        } else {
+            html += '<div></div>';
+        }
+    }
+
+    container.innerHTML = html;
 }
 
 function showCalendarioDetails(dateStr, items) {
@@ -574,7 +722,8 @@ function computeWeeklyStats(history) {
 }
 
 function renderEstatisticas() {
-    const history = getContributions();
+    const emptyState = document.getElementById('estatisticas-empty-state');
+    const content = document.getElementById('estatisticas-content');
 
     // Percentual geral
     let totalAssuntos = 0, totalConcluidos = 0;
@@ -591,6 +740,19 @@ function renderEstatisticas() {
         };
         contarFolhas(disc.assuntos);
     });
+
+    // Sem nenhum assunto cadastrado em nenhuma disciplina ainda: os gráficos
+    // ficariam todos em branco sem explicação, então mostramos um estado
+    // vazio explicando o que fazer em vez disso.
+    if (totalAssuntos === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+        if (content) content.classList.add('hidden');
+        return;
+    }
+    if (emptyState) emptyState.classList.add('hidden');
+    if (content) content.classList.remove('hidden');
+
+    const history = getContributions();
     const percentualGeral = totalAssuntos > 0 ? Math.round((totalConcluidos / totalAssuntos) * 100) : 0;
     document.getElementById('stat-percentual-valor').textContent = percentualGeral + '%';
     drawDonutChart('chart-percentual-geral', percentualGeral, getCSSVar('--accent'));
@@ -623,6 +785,13 @@ function renderEstatisticas() {
 }
 
 function updateDashboard() {
+    const emptyState = document.getElementById('dashboard-empty-state');
+    const content = document.getElementById('dashboard-content');
+    const semDados = state.disciplinas.length === 0;
+    if (emptyState) emptyState.classList.toggle('hidden', !semDados);
+    if (content) content.classList.toggle('hidden', semDados);
+    if (semDados) return;
+
     let totalDisciplinas = state.disciplinas.length;
     let totalAssuntos = 0;
     let totalConcluidos = 0;
@@ -662,6 +831,27 @@ function updateDashboard() {
         if (textProgresso) animateValue('dash-progresso-text', progressoGeral, '%');
         if (barra) barra.style.width = progressoGeral + '%';
     }, 50);
+}
+
+// Liga os botões do estado vazio do Dashboard: levam pra aba de Disciplinas
+// e já abrem o modal certo, em vez de só dizer "vá em Disciplinas".
+function initDashboardEmptyState() {
+    const btnNova = document.getElementById('dashboard-btn-nova-disciplina');
+    const btnImportar = document.getElementById('dashboard-btn-importar');
+
+    if (btnNova) {
+        btnNova.addEventListener('click', () => {
+            document.querySelector('.nav-link[data-target="disciplinas"]')?.click();
+            document.getElementById('btn-new-disciplina')?.click();
+        });
+    }
+    if (btnImportar) {
+        btnImportar.addEventListener('click', () => {
+            document.querySelector('.nav-link[data-target="disciplinas"]')?.click();
+            document.getElementById('modal-importacao')?.classList.add('active');
+            document.getElementById('import-text')?.focus();
+        });
+    }
 }
 
 function animateValue(id, end, suffix = '') {
@@ -821,6 +1011,7 @@ function initImportador() {
 
         const blocos = rawText.split(/\n\s*\n/);
         let timestampOffset = 0;
+        let disciplinasCriadas = 0, disciplinasAtualizadas = 0, assuntosCriados = 0;
 
         blocos.forEach(bloco => {
             const linhas = bloco.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -834,10 +1025,14 @@ function initImportador() {
                 const corAleatoria = PALETA_CORES[Math.floor(Math.random() * PALETA_CORES.length)];
                 disciplina = { id: 'disc_' + (Date.now() + timestampOffset++), nome: nomeDisciplina, cor: corAleatoria, progresso: 0, qtdAssuntos: 0, assuntos: [] };
                 state.disciplinas.push(disciplina);
+                disciplinasCriadas++;
+            } else {
+                disciplinasAtualizadas++;
             }
 
             assuntosDaMateria.forEach(tituloAssunto => {
                 disciplina.assuntos.push({ id: 'item_' + (Date.now() + timestampOffset++), titulo: tituloAssunto, concluido: false, filhos: [] });
+                assuntosCriados++;
             });
 
             recalcularDisciplina(disciplina);
@@ -846,6 +1041,15 @@ function initImportador() {
         saveStateAndRefresh();
         renderDisciplinas();
         closeImportModal();
+
+        // Fecha o loop: o usuário colou um texto e o modal simplesmente
+        // some — sem isso não dava pra saber se o processamento funcionou
+        // nem quanto foi criado.
+        const partes = [];
+        if (disciplinasCriadas > 0) partes.push(`${disciplinasCriadas} disciplina${disciplinasCriadas !== 1 ? 's' : ''} nova${disciplinasCriadas !== 1 ? 's' : ''}`);
+        if (disciplinasAtualizadas > 0) partes.push(`${disciplinasAtualizadas} atualizada${disciplinasAtualizadas !== 1 ? 's' : ''}`);
+        partes.push(`${assuntosCriados} assunto${assuntosCriados !== 1 ? 's' : ''}`);
+        mostrarToast(`Importação concluída: ${partes.join(', ')}`, { duracao: 5000 });
     });
 }
 
@@ -912,15 +1116,25 @@ function initBackupRestore() {
                 const disciplinas = Array.isArray(dados) ? dados : dados.disciplinas;
                 if (!Array.isArray(disciplinas)) throw new Error('Formato inválido');
 
-                const confirmar = confirm(`Restaurar backup com ${disciplinas.length} disciplina(s)? Isso vai SUBSTITUIR todos os dados atuais e não pode ser desfeito.`);
-                if (!confirmar) return;
-
+                // Em vez de bloquear com confirm() ANTES de restaurar, restaura
+                // na hora e guarda o estado anterior — o toast com "Desfazer"
+                // dá uma janela de segurança sem interromper o fluxo.
+                const estadoAnterior = state.disciplinas;
                 state.disciplinas = disciplinas;
                 saveStateAndRefresh();
                 showDisciplinasMainList();
-                alert('Backup restaurado com sucesso!');
+
+                mostrarToast(`Backup restaurado: ${disciplinas.length} disciplina(s)`, {
+                    acaoLabel: 'Desfazer',
+                    duracao: 8000,
+                    onAcao: () => {
+                        state.disciplinas = estadoAnterior;
+                        saveStateAndRefresh();
+                        showDisciplinasMainList();
+                    }
+                });
             } catch (err) {
-                alert('Não foi possível ler esse arquivo. Confira se é um backup válido do Study Tracker (.json).');
+                mostrarToast('Não foi possível ler esse arquivo. Confira se é um backup válido do Study Tracker (.json).', { perigo: true, duracao: 5000 });
             } finally {
                 input.value = '';
             }
@@ -992,6 +1206,7 @@ function openDisciplinaDetalhes(id) {
     document.getElementById('detalhe-disciplina-nome').textContent = disciplina.nome;
     renderTree();
     irParaNivel(2);
+    mostrarDicaToqueLongoUmaVez();
 }
 // Exposta em window por segurança (chamada de vários lugares no código);
 // não é mais necessária pra onclick inline, mas mantida por conveniência.
@@ -1005,15 +1220,10 @@ function showDisciplinasMainList() {
 }
 
 function deleteDisciplina(id) {
-    const disciplina = state.disciplinas.find(d => d.id === id);
-    if (!disciplina) return;
+    const indiceOriginal = state.disciplinas.findIndex(d => d.id === id);
+    if (indiceOriginal === -1) return;
+    const [disciplinaRemovida] = state.disciplinas.splice(indiceOriginal, 1);
 
-    const mensagem = disciplina.qtdAssuntos > 0
-        ? `Excluir a disciplina "${disciplina.nome}" e todos os seus ${disciplina.qtdAssuntos} assunto(s)? Essa ação não pode ser desfeita.`
-        : `Excluir a disciplina "${disciplina.nome}"? Essa ação não pode ser desfeita.`;
-    if (!confirm(mensagem)) return;
-
-    state.disciplinas = state.disciplinas.filter(d => d.id !== id);
     saveStateAndRefresh();
 
     // Se a disciplina excluída era a que estava aberta, volta pra lista principal
@@ -1023,14 +1233,32 @@ function deleteDisciplina(id) {
     } else {
         renderDisciplinas();
     }
+
+    // Exclui na hora, sem diálogo bloqueante — "Desfazer" cobre o arrependimento
+    // sem interromper quem tinha certeza da ação.
+    mostrarToast(`Disciplina "${disciplinaRemovida.nome}" excluída`, {
+        perigo: true,
+        acaoLabel: 'Desfazer',
+        onAcao: () => {
+            state.disciplinas.splice(indiceOriginal, 0, disciplinaRemovida);
+            saveStateAndRefresh();
+            if (document.getElementById('disciplinas-view').classList.contains('active')) {
+                showDisciplinasMainList();
+            }
+        }
+    });
 }
 // Exposta em window por segurança (chamada de vários lugares no código);
 // não é mais necessária pra onclick inline, mas mantida por conveniência.
 window.deleteDisciplina = deleteDisciplina;
 
-function promptAddSubItem(paiId) {
-    const subTitulo = prompt("Digite o nome do sub-assunto ou grupo:");
-    if (!subTitulo || !subTitulo.trim()) return;
+async function promptAddSubItem(paiId) {
+    const subTitulo = await abrirModalTexto({
+        titulo: 'Adicionar sub-assunto',
+        placeholder: 'Nome do sub-assunto ou grupo',
+        labelBotao: 'Adicionar'
+    });
+    if (!subTitulo) return;
 
     const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
     if (!disciplina) return;
@@ -1038,7 +1266,7 @@ function promptAddSubItem(paiId) {
     const encontrarENserir = (itens) => {
         for (let item of itens) {
             if (item.id === paiId) {
-                item.filhos.push({ id: 'item_' + Date.now(), titulo: subTitulo.trim(), concluido: false, filhos: [] });
+                item.filhos.push({ id: 'item_' + Date.now(), titulo: subTitulo, concluido: false, filhos: [] });
                 return true;
             }
             if (item.filhos && item.filhos.length > 0 && encontrarENserir(item.filhos)) return true;
@@ -1052,7 +1280,7 @@ function promptAddSubItem(paiId) {
     renderTree();
 }
 
-function editarAssunto(id) {
+async function editarAssunto(id) {
     const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
     if (!disciplina) return;
 
@@ -1067,12 +1295,14 @@ function editarAssunto(id) {
     buscar(disciplina.assuntos);
     if (!item) return;
 
-    const novoTitulo = prompt('Editar assunto:', item.titulo);
-    if (novoTitulo === null) return;
-    const limpo = novoTitulo.trim();
-    if (!limpo) return;
+    const novoTitulo = await abrirModalTexto({
+        titulo: 'Editar assunto',
+        valorInicial: item.titulo,
+        labelBotao: 'Salvar alterações'
+    });
+    if (!novoTitulo) return;
 
-    item.titulo = limpo;
+    item.titulo = novoTitulo;
     saveStateAndRefresh();
     renderTree();
 }
@@ -1082,11 +1312,13 @@ window.toggleTreeItem = function(id) {
     if (!d) return;
 
     const todayStr = getLocalYYYYMMDD();
+    let novoStatus = null;
 
     const alternarStatus = (itens) => {
         for (let item of itens) {
             if (item.id === id) {
                 item.concluido = !item.concluido;
+                novoStatus = item.concluido;
                 // Anexa a data de conclusão apenas se for finalizado
                 if (item.concluido) item.dataConclusao = todayStr;
                 else delete item.dataConclusao;
@@ -1111,44 +1343,52 @@ window.toggleTreeItem = function(id) {
     recalcularDisciplina(d);
     saveStateAndRefresh();
     renderTree();
+
+    // Só confirma ao MARCAR como concluído (não ao desmarcar) — fecha o
+    // loop de "salvou?" sem gerar ruído a cada clique na árvore.
+    if (novoStatus) {
+        mostrarToast(`${d.nome}: ${d.progresso}% concluído`, { duracao: 2200 });
+    }
 };
 
 function deleteTreeItem(id) {
     const disciplina = state.disciplinas.find(d => d.id === state.currentDisciplinaId);
     if (!disciplina) return;
 
-    // Localiza o item primeiro só pra saber o título e se ele tem filhos,
-    // e montar uma confirmação mais clara antes de remover de fato.
-    let itemEncontrado = null;
-    const buscar = (itens) => {
-        for (const item of itens) {
-            if (item.id === id) { itemEncontrado = item; return true; }
-            if (item.filhos && item.filhos.length > 0 && buscar(item.filhos)) return true;
-        }
-        return false;
-    };
-    buscar(disciplina.assuntos);
-    if (!itemEncontrado) return;
-
-    const temFilhos = itemEncontrado.filhos && itemEncontrado.filhos.length > 0;
-    const mensagem = temFilhos
-        ? `Excluir "${itemEncontrado.titulo}" e todos os seus sub-assuntos? Essa ação não pode ser desfeita.`
-        : `Excluir "${itemEncontrado.titulo}"? Essa ação não pode ser desfeita.`;
-    if (!confirm(mensagem)) return;
-
+    // Remove já guardando de onde saiu (array pai + índice), pra poder
+    // devolver exatamente no mesmo lugar se o usuário tocar em "Desfazer".
+    let itemRemovido = null, arrayPai = null, indiceOriginal = -1;
     const removerDoNivel = (itens) => {
         const idx = itens.findIndex(i => i.id === id);
-        if (idx !== -1) { itens.splice(idx, 1); return true; }
+        if (idx !== -1) {
+            arrayPai = itens;
+            indiceOriginal = idx;
+            itemRemovido = itens[idx];
+            itens.splice(idx, 1);
+            return true;
+        }
         for (const item of itens) {
             if (item.filhos && item.filhos.length > 0 && removerDoNivel(item.filhos)) return true;
         }
         return false;
     };
     removerDoNivel(disciplina.assuntos);
+    if (!itemRemovido) return;
 
     recalcularDisciplina(disciplina);
     saveStateAndRefresh();
     renderTree();
+
+    mostrarToast(`"${itemRemovido.titulo}" excluído`, {
+        perigo: true,
+        acaoLabel: 'Desfazer',
+        onAcao: () => {
+            arrayPai.splice(indiceOriginal, 0, itemRemovido);
+            recalcularDisciplina(disciplina);
+            saveStateAndRefresh();
+            if (state.currentDisciplinaId === disciplina.id) renderTree();
+        }
+    });
 }
 
 function recalcularDisciplina(disciplina) {
@@ -1211,7 +1451,7 @@ function attachLongPress(el, callback, { moveThreshold = 18, duration = 500 } = 
 
     el.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if (e.target.closest('.drag-handle, .assunto-checkbox')) return;
+        if (e.target.closest('.drag-handle, .assunto-checkbox, .checkbox-tap')) return;
         // Ignora um segundo dedo enquanto já estamos contando
         if (timer) return;
 
@@ -1420,15 +1660,42 @@ function renderDisciplinas() {
     if (!grid) return;
 
     if (state.disciplinas.length === 0) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>Nenhuma disciplina cadastrada ainda.</p></div>`;
+        grid.innerHTML = `
+            <div class="empty-state" style="grid-column:1/-1;">
+                <h3>Nenhuma disciplina ainda</h3>
+                <p>Crie sua primeira disciplina manualmente ou importe um edital inteiro de uma vez.</p>
+                <div class="empty-state-actions">
+                    <button type="button" class="btn btn-primary" id="empty-btn-nova-disciplina">Nova disciplina</button>
+                    <button type="button" class="btn btn-secondary" id="empty-btn-importar">Importar edital</button>
+                </div>
+            </div>`;
+        document.getElementById('empty-btn-nova-disciplina')?.addEventListener('click', () => {
+            document.getElementById('btn-new-disciplina')?.click();
+        });
+        document.getElementById('empty-btn-importar')?.addEventListener('click', () => {
+            document.getElementById('modal-importacao')?.classList.add('active');
+            document.getElementById('import-text')?.focus();
+        });
         return;
     }
 
-    grid.innerHTML = state.disciplinas.map(disc => `
-        <div class="card disciplina-card" data-id="${disc.id}" style="border-left-color: ${disc.cor}">
+    // Distinção visual de status: sem isso, "não começou" e "em andamento"
+    // só se diferenciavam pelo número da barra de progresso, difícil de
+    // escanear rapidamente numa lista de várias disciplinas.
+    const statusDisciplina = (disc) => {
+        if (disc.progresso >= 100 && disc.qtdAssuntos > 0) return { classe: 'concluido', label: 'Concluído' };
+        if (disc.progresso > 0) return { classe: 'em-andamento', label: 'Em andamento' };
+        return { classe: 'nao-iniciado', label: 'Não iniciado' };
+    };
+
+    grid.innerHTML = state.disciplinas.map(disc => {
+        const status = statusDisciplina(disc);
+        return `
+        <div class="card disciplina-card status-${status.classe}" data-id="${disc.id}" style="border-left-color: ${disc.cor}">
             <div class="disciplina-card-header">
                 <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
                 <h3 class="disciplina-card-titulo">${escapeHTML(disc.nome)}</h3>
+                <span class="disciplina-status-badge ${status.classe}">${status.label}</span>
             </div>
             <div class="disciplina-meta">
                 <span>Assuntos: <strong>${disc.qtdAssuntos}</strong></span>
@@ -1436,7 +1703,8 @@ function renderDisciplinas() {
             </div>
             <div class="progress-container"><div class="progress-bar" style="width: ${disc.progresso}%; background-color: ${disc.cor}"></div></div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 
     grid.querySelectorAll('.disciplina-card').forEach(card => {
         const id = card.dataset.id;
@@ -1496,7 +1764,7 @@ function renderTree() {
                             <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
                             <div class="summary-content">
                                 <span class="summary-toggle-icon">▶</span>
-                                <input type="checkbox" class="assunto-checkbox" ${item.concluido ? 'checked' : ''} onclick="event.stopPropagation(); toggleTreeItem('${item.id}')">
+                                <label class="checkbox-tap" onclick="event.stopPropagation(); toggleTreeItem('${item.id}')"><input type="checkbox" class="assunto-checkbox" tabindex="-1" ${item.concluido ? 'checked' : ''}></label>
                                 <span style="text-decoration: ${item.concluido ? 'line-through' : 'none'}; opacity: ${item.concluido ? 0.6 : 1}">${escapeHTML(item.titulo)}</span>
                             </div>
                             <span class="node-badge ${pctLocal === 100 ? 'concluido' : ''}">${pctLocal}%</span>
@@ -1509,8 +1777,8 @@ function renderTree() {
             return `
                 <div class="tree-leaf ${item.concluido ? 'concluido' : ''}" data-id="${item.id}">
                     <button class="drag-handle" aria-label="Arrastar para reordenar" title="Arrastar para reordenar"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></button>
-                    <input type="checkbox" class="assunto-checkbox" id="${item.id}" ${item.concluido ? 'checked' : ''} onclick="toggleTreeItem('${item.id}')">
-                    <label for="${item.id}">${escapeHTML(item.titulo)}</label>
+                    <label class="checkbox-tap" onclick="toggleTreeItem('${item.id}')"><input type="checkbox" class="assunto-checkbox" tabindex="-1" ${item.concluido ? 'checked' : ''}></label>
+                    <label class="tree-leaf-titulo" onclick="toggleTreeItem('${item.id}')">${escapeHTML(item.titulo)}</label>
                 </div>
             `;
         }
